@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api — ruff + pytest
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gym
+          POSTGRES_PASSWORD: gym
+          POSTGRES_DB: gym
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gym -d gym"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://gym:gym@localhost:5432/gym
+      # Tests serve their own JWKS on loopback and override this.
+      SUPABASE_URL: http://127.0.0.1:1
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: api/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Migrations apply cleanly
+        run: alembic upgrade head
+
+      - name: Models match migrations
+        run: alembic check
+
+      - name: Test
+        run: pytest
+
+  app:
+    name: app — tsc + eslint
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Environment
+        # The app reads EXPO_PUBLIC_* at module load; the example values are
+        # syntactically valid and never reach a real Supabase project.
+        run: cp .env.example .env
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
