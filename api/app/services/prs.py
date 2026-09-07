@@ -18,6 +18,14 @@ from dataclasses import dataclass
 #: Beyond this the linear estimate stops tracking reality; see module docstring.
 EPLEY_REP_CAP = 12
 
+#: Tolerance when comparing two e1RM estimates.
+#:
+#: The historical best is aggregated in SQL and the session's is computed here,
+#: so the two travel through different arithmetic. Without a tolerance, a
+#: last-bit difference on an identical lift reads as a record. A microgram of
+#: slack is far below anything a barbell can express.
+PR_EPSILON_KG = 1e-6
+
 
 @dataclass(frozen=True)
 class SetPerformance:
@@ -61,7 +69,7 @@ def detect(
     `historical_best` is the user's best e1RM per exercise *before* this
     session. An exercise absent from it has never been performed, and a first
     attempt is not a record — there is nothing it beat (spec §7.3). Ties are not
-    records either: the comparison is strictly greater.
+    records either: the comparison is strictly greater, within `PR_EPSILON_KG`.
     """
     records: list[PersonalRecord] = []
 
@@ -69,7 +77,7 @@ def detect(
         previous = historical_best.get(exercise_id)
         if previous is None:
             continue  # no baseline — first ever performance
-        if session_best > previous:
+        if session_best > previous + PR_EPSILON_KG:
             records.append(
                 PersonalRecord(
                     exercise_id=exercise_id,

@@ -279,3 +279,67 @@ def test_bad_ranges_are_rejected(client: TestClient, auth_headers: dict[str, str
         ).status_code
         == 422
     )
+
+
+@pytest.mark.parametrize(
+    ("weight", "reps"),
+    [
+        (102.5, 5),  # e1rm 119.5833... — the case that shipped broken
+        (100.0, 12),  # e1rm 140.0 exactly — terminating, passed even when broken
+        (77.5, 7),  # e1rm 95.583...
+        (60.0, 3),  # e1rm 66.0 exactly
+        (142.5, 11),  # e1rm 194.75
+    ],
+)
+def test_repeating_a_best_lift_is_never_a_pr(
+    client: TestClient, auth_headers: dict[str, str], shared_exercise: int, weight: float, reps: int
+) -> None:
+    """Regression: the historical best is aggregated in SQL, the session's is
+    computed in Python.
+
+    Those paths must agree exactly. They once did not — SQLAlchemy quantised the
+    aggregate to weight_kg's numeric(6,2) scale, so 119.5833... came back as
+    119.58 and repeating a best set announced a PR it had not earned. Weights
+    whose e1RM terminates in two decimals hid the bug entirely, which is why the
+    original test missed it.
+    """
+    body = session_body(shared_exercise, [(weight, reps)])
+    assert client.post("/workout-sessions", json=body, headers=auth_headers).status_code == 201
+
+    repeat = client.post(
+        "/workout-sessions",
+        json=session_body(shared_exercise, [(weight, reps)], session_date="2026-09-14"),
+        headers=auth_headers,
+    )
+    assert repeat.json()["prs"] == [], f"{weight}x{reps} falsely reported a PR"
+
+
+def test_the_smallest_real_increment_still_counts(
+    client: TestClient, auth_headers: dict[str, str], shared_exercise: int
+) -> None:
+    """The tolerance must not be so wide it swallows an actual plate change."""
+    client.post(
+        "/workout-sessions", json=session_body(shared_exercise, [(102.5, 5)]), headers=auth_headers
+    )
+
+    # 1.25 kg is the smallest plate the app offers (§2.3).
+    resp = client.post(
+        "/workout-sessions",
+        json=session_body(shared_exercise, [(103.75, 5)], session_date="2026-09-14"),
+        headers=auth_headers,
+    )
+    assert len(resp.json()["prs"]) == 1
+
+
+def test_one_more_rep_at_the_same_weight_is_a_pr(
+    client: TestClient, auth_headers: dict[str, str], shared_exercise: int
+) -> None:
+    client.post(
+        "/workout-sessions", json=session_body(shared_exercise, [(102.5, 5)]), headers=auth_headers
+    )
+    resp = client.post(
+        "/workout-sessions",
+        json=session_body(shared_exercise, [(102.5, 6)], session_date="2026-09-14"),
+        headers=auth_headers,
+    )
+    assert len(resp.json()["prs"]) == 1
