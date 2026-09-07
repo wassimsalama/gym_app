@@ -9,7 +9,8 @@ import { StreakBadge } from '@/components/StreakBadge';
 import { SyncBadge } from '@/components/SyncBadge';
 import { VolumeRings } from '@/components/VolumeRings';
 import { WeightChart } from '@/components/WeightChart';
-import { ApiError, getDashboard, type Dashboard } from '@/lib/api';
+import { getDashboard, type Dashboard } from '@/lib/api';
+import { describeError, type DisplayError } from '@/lib/errors';
 import { signOut, useAuth } from '@/lib/auth';
 import { formatLong, today } from '@/lib/dates';
 import { driftFromBaselineKg } from '@/lib/goalState';
@@ -24,7 +25,7 @@ export default function DashboardScreen() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayError | null>(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -32,7 +33,7 @@ export default function DashboardScreen() {
       setData(await getDashboard(today()));
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : 'Could not load your dashboard');
+      setError(describeError(err, 'Could not load your dashboard'));
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -46,9 +47,7 @@ export default function DashboardScreen() {
         if (active) setData(next);
       })
       .catch((err: unknown) => {
-        if (active) {
-          setError(err instanceof ApiError ? err.detail : 'Could not load your dashboard');
-        }
+        if (active) setError(describeError(err, 'Could not load your dashboard'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -84,8 +83,14 @@ export default function DashboardScreen() {
             <ActivityIndicator color="#4ADE80" />
           </View>
         ) : error ? (
-          <Card title="Offline">
-            <Text className="text-base text-danger">{error}</Text>
+          <Card title={error.title}>
+            <Text className="text-base text-danger">{error.detail}</Text>
+            {!error.offline ? (
+              <Text className="mt-2 text-xs text-muted">
+                The server answered, so this is not your connection. If it persists after a reload,
+                the app and the API may be out of step.
+              </Text>
+            ) : null}
             <View className="mt-4">
               <Button title="Retry" onPress={load} />
             </View>
