@@ -7,7 +7,6 @@ import {
   ScrollView,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,7 +39,6 @@ import { formatDelta, formatWeight, fromKg, parseWeightInput } from '@/lib/units
 
 export default function Weight() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const unit = useUnit();
   const input = useRef<TextInput>(null);
 
@@ -262,7 +260,7 @@ export default function Weight() {
                 </Text>
               </View>
 
-              <WeightChart series={visible} unit={unit} width={width - 72} />
+              <WeightChart series={visible} unit={unit} />
             </>
           )}
         </Card>
