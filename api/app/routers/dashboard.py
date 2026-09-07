@@ -1,12 +1,12 @@
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.auth import DbSession
 from app.core.limits import ReadUser
-from app.models import DailyLog, Exercise, Goal, SetLog, UserActivity, WorkoutSession
+from app.models import Goal, UserActivity
 from app.routers import _dashboard_data as data
 from app.schemas.dashboard import (
     BestLift,
@@ -21,18 +21,12 @@ from app.schemas.dashboard import (
     WeightSeriesPoint,
 )
 from app.services import plateaus, projection, recap, streaks, suggestions, tdee
-from app.services.prs import EPLEY_REP_CAP
 from app.services.smoothing import smooth_series
 
 router = APIRouter(tags=["dashboard"])
 
-#: How far back the series reaches. The weight tab narrows this client-side, so
-#: the window only needs to be the widest span anyone can ask for. A year of
-#: daily points is roughly 20 KB, well inside §12's one-second budget.
+#: How far back the series reaches. The weight tab narrows this client-side.
 MAX_SERIES_DAYS = 365
-
-#: Recent PRs shown on the home tab (spec §6).
-PR_WINDOW_DAYS = 7
 
 
 @router.get("/dashboard", response_model=Dashboard)
@@ -46,14 +40,15 @@ def get_dashboard(
 ) -> Dashboard:
     """Everything the home tab renders, in one request (spec §6).
 
-    `date` is supplied by the client because only the device knows what day it
-    is where the user is standing — §6 forbids the server deriving "today" from
-    UTC, and streaks, Monday-anchored volume weeks and the recap all need a real
-    calendar day. It matches how `PUT /daily-logs/{date}` already works.
+    `date` comes from the client because only the device knows what day it is
+    where the user is standing — §6 forbids the server deriving it from UTC, and
+    streaks, Monday-anchored volume weeks and the recap all need a calendar day.
+
+    The data is fetched in a handful of round trips up front and every service
+    derives its answer from that in memory. Asking per-service was 23 trips,
+    which is invisible on a local socket and fatal across a continent.
     """
-    # The home tab makes exactly one request per app open, so this is the
-    # natural place to note that the user was here. ON CONFLICT DO NOTHING makes
-    # it at most one write per user per day, whatever else they do.
+    # At most one write per user per day, however often they look.
     db.execute(
         pg_insert(UserActivity)
         .values(user_id=user.id, active_on=today)
@@ -68,20 +63,17 @@ def get_dashboard(
         .limit(1)
     )
 
-    # --- weight ------------------------------------------------------------
-    window_start = today - timedelta(days=MAX_SERIES_DAYS - 1)
-    observations = db.execute(
-        select(DailyLog.log_date, DailyLog.weight_kg)
-        .where(
-            DailyLog.user_id == user.id,
-            DailyLog.weight_kg.is_not(None),
-            DailyLog.log_date >= window_start,
-            DailyLog.log_date <= today,
-        )
-        .order_by(DailyLog.log_date)
-    ).all()
-    points = smooth_series([(day, float(kg)) for day, kg in observations])
+    recap_start, recap_end = recap.last_completed_week(today)
+    loaded = data.load(
+        db,
+        user.id,
+        today=today,
+        series_days=MAX_SERIES_DAYS,
+        recap_week_start=recap_start,
+    )
 
+    # --- weight ------------------------------------------------------------
+    points = smooth_series(loaded.weights())
     current_smoothed = points[-1].smoothed_kg if points else None
     delta = (
         current_smoothed - float(goal.start_weight_kg)
@@ -109,80 +101,42 @@ def get_dashboard(
 
     # --- streaks -----------------------------------------------------------
     streak_start = today - timedelta(days=streaks.STREAK_WINDOW_DAYS - 1)
-    logged_dates = set(
-        db.scalars(
-            select(DailyLog.log_date).where(
-                DailyLog.user_id == user.id,
-                DailyLog.log_date >= streak_start,
-                DailyLog.log_date <= today,
-            )
-        )
-    )
-    trained_dates = set(
-        db.scalars(
-            select(DailyLog.log_date).where(
-                DailyLog.user_id == user.id,
-                DailyLog.trained.is_(True),
-                DailyLog.log_date >= streak_start,
-                DailyLog.log_date <= today,
-            )
-        )
-    )
-    # Spec §7.6: a logged session counts as training whether or not the flag
-    # was also set.
-    trained_dates |= set(
-        db.scalars(
-            select(WorkoutSession.session_date).where(
-                WorkoutSession.user_id == user.id,
-                WorkoutSession.session_date >= streak_start,
-                WorkoutSession.session_date <= today,
-            )
-        )
-    )
     counted = streaks.count_streaks(
-        logged_dates=logged_dates, trained_dates=trained_dates, as_of=today
+        logged_dates=loaded.logged_dates(since=streak_start, until=today),
+        trained_dates=loaded.trained_dates(since=streak_start, until=today),
+        as_of=today,
     )
 
-    # --- volume rings ------------------------------------------------------
+    # --- volume ------------------------------------------------------------
     monday = streaks.week_start(today)
-    sets_by_group = dict(
-        db.execute(
-            select(Exercise.muscle_group, func.count(SetLog.id))
-            .join(SetLog, SetLog.exercise_id == Exercise.id)
-            .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
-            .where(
-                WorkoutSession.user_id == user.id,
-                WorkoutSession.session_date >= monday,
-                WorkoutSession.session_date <= today,
-            )
-            .group_by(Exercise.muscle_group)
-        ).all()
-    )
-
-    # --- tdee --------------------------------------------------------------
-    calorie_rows = db.execute(
-        select(DailyLog.log_date, DailyLog.calories).where(
-            DailyLog.user_id == user.id,
-            DailyLog.calories.is_not(None),
-            DailyLog.log_date >= today - timedelta(days=tdee.WINDOW_DAYS - 1),
-            DailyLog.log_date <= today,
-        )
-    ).all()
-    estimate = tdee.estimate(points, dict(calorie_rows), as_of=today)
-
+    sets_by_group = loaded.sets_by_muscle_group(since=monday, until=today)
     rings = streaks.volume_rings(sets_by_group=sets_by_group)
 
+    # --- tdee --------------------------------------------------------------
+    estimate = tdee.estimate(
+        points,
+        loaded.calories_by_date(since=today - timedelta(days=tdee.WINDOW_DAYS - 1), until=today),
+        as_of=today,
+    )
+
     # --- suggestions -------------------------------------------------------
-    calorie_ctx, mean_calories = data.calorie_context(
-        db, user.id, today, estimate.estimate_kcal if estimate.reliable else None
+    fortnight = loaded.calories_by_date(since=today - timedelta(days=13), until=today)
+    mean_calories = sum(fortnight.values()) / len(fortnight) if fortnight else None
+
+    calorie_ctx = (
+        plateaus.CalorieContext(mean_calories=mean_calories, tdee_estimate=estimate.estimate_kcal)
+        if mean_calories is not None and estimate.reliable and estimate.estimate_kcal
+        else None
     )
-    found_plateaus = plateaus.detect(
-        data.exercise_histories(db, user.id, today),
-        calorie=calorie_ctx,
-        recovery=data.recovery_context(db, user.id, today),
-    )
+
     assembled = suggestions.assemble(
-        suggestions.from_plateaus(found_plateaus),
+        suggestions.from_plateaus(
+            plateaus.detect(
+                loaded.exercise_histories(),
+                calorie=calorie_ctx,
+                recovery=_recovery(loaded, today),
+            )
+        ),
         suggestions.from_tdee(estimate, mean_calories),
         suggestions.from_volume(rings, trained_this_week=bool(sets_by_group)),
         suggestions.from_goal(
@@ -222,58 +176,101 @@ def get_dashboard(
             )
             for ring in rings
         ],
-        prs_recent=_recent_prs(db, user.id, today),
+        prs_recent=_recent_prs(loaded, today),
         suggestions=[
             Suggestion(id=s.id, kind=s.kind, message=s.message, evidence=s.evidence)
             for s in assembled
         ],
-        recap=_build_recap(db, user.id, today, points),
+        recap=_build_recap(loaded, points, today, recap_start, recap_end),
     )
 
 
-def _build_recap(db, user_id, today: date, points: list) -> Recap | None:
-    """The last completed Mon–Sun week (spec §7.7).
+def _recovery(loaded: data.DashboardData, today: date) -> plateaus.RecoveryContext | None:
+    """Rest days lately against the user's own usual rate (§7.4).
 
-    Returned whenever there is a finished week with anything in it, rather than
-    only on Sundays — a recap the user cannot look back at on Tuesday is a
-    recap they will mostly never see.
+    Compared against their own trailing habit, not a population average: someone
+    who trains six days a week is not under-recovered for doing so, but is if
+    they suddenly stop resting at all.
     """
-    start, end = recap.last_completed_week(today)
-
-    session_dates, set_volumes = data.week_totals(db, user_id, start, end)
-    logged = set(
-        db.scalars(
-            select(DailyLog.log_date).where(
-                DailyLog.user_id == user_id,
-                DailyLog.log_date >= start,
-                DailyLog.log_date <= end,
-            )
-        )
+    baseline_days = data.REST_BASELINE_WEEKS * 7
+    baseline_trained = loaded.trained_dates(
+        since=today - timedelta(days=baseline_days - 1), until=today
     )
-    trained = set(
-        db.scalars(
-            select(DailyLog.log_date).where(
-                DailyLog.user_id == user_id,
-                DailyLog.trained.is_(True),
-                DailyLog.log_date >= start,
-                DailyLog.log_date <= end,
+    if not baseline_trained:
+        return None
+
+    recent_trained = loaded.trained_dates(since=today - timedelta(days=13), until=today)
+
+    return plateaus.RecoveryContext(
+        rest_days_recent=14 - len(recent_trained),
+        rest_days_typical=(baseline_days - len(baseline_trained)) / baseline_days * 14,
+    )
+
+
+def _recent_prs(loaded: data.DashboardData, today: date) -> list[dict]:
+    """Lifts in the last week that beat everything before them.
+
+    Recomputed rather than stored: §5 forbids persisting derived values, and a
+    cached `is_pr` goes stale the moment an old session is edited.
+    """
+    since = today - timedelta(days=data.PR_WINDOW_DAYS - 1)
+
+    records = []
+    for exercise_id, (name, best, achieved_on) in loaded.best_e1rm_between(
+        since=since, until=today
+    ).items():
+        prior = loaded.pr_baseline.get(exercise_id)
+        if prior is not None and best > prior:
+            records.append(
+                {
+                    "exercise_id": exercise_id,
+                    "exercise_name": name,
+                    "e1rm": round(best, 2),
+                    "previous_e1rm": round(prior, 2),
+                    "achieved_on": achieved_on.isoformat(),
+                }
             )
-        )
-    ) | set(session_dates)
+
+    records.sort(key=lambda r: r["e1rm"] - r["previous_e1rm"], reverse=True)
+    return records
+
+
+def _build_recap(
+    loaded: data.DashboardData, points: list, today: date, start: date, end: date
+) -> Recap | None:
+    """The last completed Mon–Sun week (spec §7.7)."""
+    logged = loaded.logged_dates(since=start, until=end)
+    session_dates = sorted(d for d in loaded.session_dates if start <= d <= end)
 
     if not logged and not session_dates:
         return None
+
+    week_sets = [row for row in loaded.sets if start <= row.session_date <= end]
+    best_lift = None
+    week_best = loaded.best_e1rm_between(since=start, until=end)
+    if week_best:
+        exercise_id, (name, e1rm, _) = max(week_best.items(), key=lambda item: item[1][1])
+        best_lift = recap.BestLift(
+            exercise_id=exercise_id,
+            exercise_name=name,
+            e1rm=round(e1rm, 2),
+            previous_best=(
+                round(loaded.recap_baseline[exercise_id], 2)
+                if exercise_id in loaded.recap_baseline
+                else None
+            ),
+        )
 
     in_week = [p for p in points if start <= p.date <= end]
     built = recap.build(
         as_of=today,
         session_dates=session_dates,
-        set_volumes=set_volumes,
+        set_volumes=[(row.weight_kg, row.reps) for row in week_sets],
         logged_dates=logged,
-        trained_dates=trained,
+        trained_dates=loaded.trained_dates(since=start, until=end),
         smoothed_start=in_week[0].smoothed_kg if in_week else None,
         smoothed_end=in_week[-1].smoothed_kg if in_week else None,
-        best_lift=data.week_best_lift(db, user_id, start, end),
+        best_lift=best_lift,
     )
 
     return Recap(
@@ -299,55 +296,3 @@ def _build_recap(db, user_id, today: date, points: list) -> Recap | None:
             else None
         ),
     )
-
-
-def _recent_prs(db, user_id, today: date) -> list[dict]:
-    """Best e1RM per exercise in the last week, where it beat everything prior.
-
-    Recomputed rather than stored: §5 forbids persisting derived values, and a
-    cached `is_pr` would go stale the moment an old session was edited.
-    """
-    since = today - timedelta(days=PR_WINDOW_DAYS - 1)
-
-    e1rm = SetLog.weight_kg * (1 + func.least(SetLog.reps, EPLEY_REP_CAP) / 30.0)
-    recent = db.execute(
-        select(
-            Exercise.id,
-            Exercise.name,
-            func.max(e1rm).label("best"),
-            func.max(WorkoutSession.session_date).label("achieved_on"),
-        )
-        .join(SetLog, SetLog.exercise_id == Exercise.id)
-        .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
-        .where(
-            WorkoutSession.user_id == user_id,
-            WorkoutSession.session_date >= since,
-            WorkoutSession.session_date <= today,
-        )
-        .group_by(Exercise.id, Exercise.name)
-    ).all()
-
-    records = []
-    for exercise_id, name, best, achieved_on in recent:
-        prior = db.scalar(
-            select(func.max(e1rm))
-            .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
-            .where(
-                WorkoutSession.user_id == user_id,
-                SetLog.exercise_id == exercise_id,
-                WorkoutSession.session_date < since,
-            )
-        )
-        if prior is not None and float(best) > float(prior):
-            records.append(
-                {
-                    "exercise_id": exercise_id,
-                    "exercise_name": name,
-                    "e1rm": round(float(best), 2),
-                    "previous_e1rm": round(float(prior), 2),
-                    "achieved_on": achieved_on.isoformat(),
-                }
-            )
-
-    records.sort(key=lambda r: r["e1rm"] - r["previous_e1rm"], reverse=True)
-    return records

@@ -16,6 +16,33 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Dashboard cut from 23 database round trips to 8
+
+Measuring the region problem turned up the underlying issue: the endpoint asked
+the database separately for every service it fed, including an N+1 in recent
+PRs — one query per exercise found.
+
+Latency multiplies by the number of trips, not the amount of data, so this is
+invisible on a local socket and ruinous across a continent. It is now two
+windowed reads (daily logs; sessions joined to sets and exercises) plus two
+small aggregates, with every service deriving its answer from those in memory.
+The row counts are tiny — a year of daily logs is 365 rows — so moving the work
+out of SQL costs nothing.
+
+    23 trips at 250 ms:  5.75 s
+     8 trips at 250 ms:  2.00 s
+     8 trips at   2 ms:  0.02 s
+
+The remaining eight are: the auth profile lookup, the activity upsert, the
+goal, two windowed reads, session dates (quick-logs have no sets, so they need
+their own scan), and two PR baselines at different cutoffs.
+
+All 335 tests passed unchanged across the rewrite, which is the evidence the
+behaviour is identical — the point of having them.
+
+Co-location remains the real fix; this is the optimisation that makes the
+co-located case comfortable rather than merely adequate.
+
 ## 2026-09-07 — Region matters more than it looks: 23 round trips per dashboard
 
 Wes's first Supabase project was in Seoul, chosen without thinking about it.
