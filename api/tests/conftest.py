@@ -167,6 +167,28 @@ def make_token(
 
 
 @pytest.fixture
+def shared_exercise(db: Session) -> int:
+    """A catalogue entry, as `scripts/seed_exercises.py` would create.
+
+    Distinct from a user's custom exercise, which is private to its creator —
+    only a shared one can appear in two users' histories.
+    """
+    from app.models import Exercise
+
+    exercise = Exercise(
+        name="Barbell Bench Press",
+        muscle_group="chest",
+        equipment="barbell",
+        source="seed",
+        created_by=None,
+    )
+    db.add(exercise)
+    db.commit()
+    db.refresh(exercise)
+    return exercise.id
+
+
+@pytest.fixture
 def user_id() -> uuid.UUID:
     return uuid.uuid4()
 
