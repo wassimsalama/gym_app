@@ -188,6 +188,24 @@ subdomain. DNS is automatic when the domain is on the same account.
 
 ---
 
+## 3b. Row level security — not optional
+
+Supabase publishes every `public` table over PostgREST at `/rest/v1/<table>`,
+authorised by the **anon key**, which is public and ships inside the web bundle.
+Without RLS, anyone reading the site's JavaScript can read and write the whole
+database directly, bypassing the API and everything it enforces.
+
+Migration `0003` enables RLS on every table, so it applies automatically on
+deploy. Confirm it took:
+
+```bash
+python scripts/check_config.py
+```
+
+`rest api exposure — tables are not readable with the anon key` is the line to
+look for. If it says the anon key can read a table, the migration has not run
+against that database yet.
+
 ## 4. Protecting accounts from password guessing
 
 Someone who knows a user's email can try passwords against it. The app slows

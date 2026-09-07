@@ -184,6 +184,24 @@ def make_token(
 
 
 @pytest.fixture
+def s3_stub(monkeypatch: pytest.MonkeyPatch) -> dict:
+    """A pretend bucket, so photo authorisation can be tested without a network."""
+    from app.core import storage
+
+    state: dict = {"deleted": [], "prefixes": []}
+
+    monkeypatch.setattr(storage, "is_configured", lambda: True)
+    monkeypatch.setattr(storage, "require_configured", lambda: None)
+    monkeypatch.setattr(storage, "presign_upload", lambda key, ct: f"https://bucket.test/{key}")
+    monkeypatch.setattr(storage, "presign_view", lambda key: f"https://bucket.test/{key}?view")
+    monkeypatch.setattr(storage, "delete_object", lambda key: state["deleted"].append(key))
+    monkeypatch.setattr(
+        storage, "delete_prefix", lambda prefix: (state["prefixes"].append(prefix), 0)[1]
+    )
+    return state
+
+
+@pytest.fixture
 def shared_exercise(db: Session) -> int:
     """A catalogue entry, as `scripts/seed_exercises.py` would create.
 

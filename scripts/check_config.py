@@ -120,6 +120,65 @@ def check_storage() -> None:
     report(OK, "photo storage", f"bucket '{wanted}' exists")
 
 
+def check_rls() -> None:
+    """Confirm Supabase's REST API cannot reach the tables.
+
+    Supabase publishes every `public` table over PostgREST, authorised by the
+    anon key — which is public by design and ships inside the web bundle.
+    Without row level security that route bypasses this application entirely,
+    along with all of its authorisation. It was open once; this makes sure
+    nobody has to discover that again.
+
+    The probe uses the app's own anon key, exactly as a stranger would.
+    """
+    app_env = REPO_ROOT / "app" / ".env"
+    if not app_env.exists():
+        report(WARN, "rest api exposure", "app/.env not found, cannot probe")
+        return
+
+    anon = url = ""
+    for line in app_env.read_text().splitlines():
+        if line.startswith("EXPO_PUBLIC_SUPABASE_ANON_KEY="):
+            anon = line.split("=", 1)[1].strip()
+        elif line.startswith("EXPO_PUBLIC_SUPABASE_URL="):
+            url = line.split("=", 1)[1].strip()
+
+    if not anon or not url:
+        report(WARN, "rest api exposure", "no anon key configured, cannot probe")
+        return
+
+    exposed = []
+    for table in ("profiles", "daily_logs", "workout_sessions", "goals", "photos", "exercises"):
+        request = urllib.request.Request(  # noqa: S310
+            f"{url}/rest/v1/{table}?select=*&limit=1",
+            headers={"apikey": anon, "Authorization": f"Bearer {anon}"},
+        )
+        try:
+            with urllib.request.urlopen(  # noqa: S310
+                request, timeout=15, context=default_ssl_context()
+            ) as response:
+                rows = json.loads(response.read())
+                # An empty list may mean RLS is denying, or simply that the
+                # table is empty. Rows coming back is unambiguous.
+                if rows:
+                    exposed.append(table)
+        except urllib.error.HTTPError:
+            pass  # 401/403 is the desired outcome.
+        except urllib.error.URLError as exc:
+            report(WARN, "rest api exposure", f"could not probe: {exc}")
+            return
+
+    if exposed:
+        report(
+            BAD,
+            "rest api exposure",
+            f"the public anon key can read {', '.join(exposed)} directly — "
+            "row level security is off, and the API can be bypassed",
+        )
+    else:
+        report(OK, "rest api exposure", "tables are not readable with the anon key")
+
+
 def check_admins() -> None:
     admins = get_settings().admins
     if not admins:
@@ -149,6 +208,7 @@ def main() -> int:
     check_database()
     check_auth()
     check_storage()
+    check_rls()
     check_admins()
     check_cors()
 

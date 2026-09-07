@@ -16,6 +16,40 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-08 — Row level security: the API could be bypassed entirely — **found by Wes**
+
+Wes asked whether RLS was needed. It was, urgently, and nothing else built so
+far would have helped.
+
+The database lives inside a Supabase project, and Supabase publishes every
+`public` table over PostgREST at `/rest/v1/<table>`, authorised by the anon key.
+That key is public by design — it ships inside the web bundle. With RLS off,
+anyone who opened the site's JavaScript could read and write every table
+directly, never touching this application.
+
+Verified before fixing, using only the anon key:
+
+    GET  /rest/v1/daily_logs   -> 200
+    GET  /rest/v1/profiles     -> 200
+    POST /rest/v1/exercises    -> 201 Created
+
+The 19 cross-user authorisation tests written an hour earlier proved the API's
+own endpoints were watertight, and were completely beside the point on this
+path. Authorisation you can walk around is not authorisation. Worth remembering
+that a proof only covers the route it tested.
+
+Migration 0003 enables RLS on every table with **no policies**. That denies
+everything to the `anon` and `authenticated` roles while leaving the API
+untouched, because it connects as the table owner and owners bypass RLS.
+
+Deliberately no per-user policies. They would restate this application's
+authorisation rules in a second language, free to drift out of step with the
+first, to guard a path that should not be reachable at all. Shutting the door
+is simpler than furnishing the room behind it.
+
+`check_config.py` now probes the REST API with the app's own anon key and fails
+if any table returns rows — the check that would have caught this on day one.
+
 ## 2026-09-08 — Production web builds are verified, not trusted
 
 The first production build came out pointing at `http://192.168.1.25:8000` —
