@@ -15,10 +15,36 @@ the API must exist and have a URL before you build the site.
 
 ---
 
+## 0. Region — do this before anything else
+
+The dashboard makes **23 database round trips per load**, so the API and the
+database must be in the same region. Split across continents this is the
+difference between 0.05 s and 5.75 s.
+
+Users are mainly in Canada, some in the Middle East. Railway has no Canadian
+region, so:
+
+| | |
+| --- | --- |
+| Supabase project | `us-east-1` (N. Virginia) |
+| Railway service | `us-east4` (Virginia) |
+
+Same metro, so the 23 round trips cost about 50 ms in total, and a Toronto user
+is ~20 ms from the API.
+
+`ca-central-1` would keep data in Canada but sits ~15 ms from Railway's nearest
+region, which is 350 ms added to every dashboard load. Only worth it if
+residency is a requirement rather than a preference.
+
+**A Supabase project's region cannot be changed after creation.** If the
+existing project is in the wrong region, make a new one now — it costs fifteen
+minutes today and a data migration later.
+
+---
+
 ## 1. Database — Supabase Postgres
 
-You already have the project. Use its database rather than adding another
-service.
+Use the project's database rather than adding another service.
 
 **Click the green "Connect" button at the top of the project dashboard.** It is
 not under Settings — Supabase moved it, and it is easy to hunt for in the wrong

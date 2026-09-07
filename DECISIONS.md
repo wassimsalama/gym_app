@@ -16,6 +16,42 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Region matters more than it looks: 23 round trips per dashboard
+
+Wes's first Supabase project was in Seoul, chosen without thinking about it.
+Measuring rather than assuming showed why that would have been painful: one
+dashboard load makes **23 database round trips**, so latency between the API
+and the database is multiplied by 23 on every page.
+
+    at   2 ms per round trip:   0.05 s
+    at 250 ms per round trip:   5.75 s
+
+§12 allows one second. Co-located it is comfortable; split across continents it
+is six times over before any work happens.
+
+User latency behaves differently — one round trip per page — so the rule is:
+put the API and database in the same region, and put that region near the
+users. Users are mainly in Canada with some in the Middle East, and Railway has
+no Canadian region, so `us-east-1` + `us-east4` (both Virginia) wins.
+`ca-central-1` would keep data in Canada at the cost of ~350 ms per load.
+
+Worth noting the endpoint could also be made less chatty — 23 queries is more
+than it needs — and that would be better engineering regardless. But even five
+queries at 250 ms is 1.25 s, so co-location is the fix and query batching is an
+optimisation.
+
+## 2026-09-07 — Privacy policy jurisdiction corrected
+
+The policy was written citing UK GDPR and the ICO. I inferred that and never
+checked; the users are actually in Canada and the Middle East. Now references
+PIPEDA and the Office of the Privacy Commissioner of Canada, notes that local
+law elsewhere is honoured too, and states plainly that the data is stored in the
+United States because that is where the processors run. All three processors
+are named rather than described vaguely.
+
+A privacy policy asserting the wrong regulator is worse than a vague one — it
+looks authoritative while being wrong.
+
 ## 2026-09-07 — Hosting: Cloudflare Pages, Railway, Supabase — **Wes's call**
 
 - **Web on Cloudflare Pages.** Free, and `expo export --platform web` produces
