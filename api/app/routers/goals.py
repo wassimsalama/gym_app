@@ -3,7 +3,7 @@ from sqlalchemy import select, update
 
 from app.core.auth import CurrentUser, DbSession
 from app.models import DailyLog, Goal
-from app.schemas.goal import GoalCreate, GoalOut
+from app.schemas.goal import GoalCreate, GoalOut, GoalUpdate
 
 router = APIRouter(prefix="/goals", tags=["goals"])
 
@@ -64,4 +64,33 @@ def get_active_goal(user: CurrentUser, db: DbSession) -> Goal:
     )
     if goal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active goal")
+    return goal
+
+
+@router.patch("/active", response_model=GoalOut)
+def update_active_goal(body: GoalUpdate, user: CurrentUser, db: DbSession) -> Goal:
+    """Change the target of the goal already in flight.
+
+    Only the destination moves. `start_weight_kg` and `start_date` are
+    untouched, so adjusting a target does not quietly reset progress to zero —
+    that would make the number meaningless. Starting over is `POST /goals`.
+    """
+    goal = db.scalar(
+        select(Goal)
+        .where(Goal.user_id == user.id, Goal.status == "active")
+        .order_by(Goal.created_at.desc())
+        .limit(1)
+    )
+    if goal is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active goal")
+
+    provided = body.model_dump(exclude_unset=True)
+    if not provided:
+        raise HTTPException(status_code=422, detail="No fields to update")
+
+    for field, value in provided.items():
+        setattr(goal, field, value)
+
+    db.commit()
+    db.refresh(goal)
     return goal

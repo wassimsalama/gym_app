@@ -16,6 +16,33 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — `PATCH /goals/active` added to the contract — **needs Wes**
+
+§6 defines only `POST /goals` and `GET /goals/active`, so there was no way to
+change a target. Wes asked for one. Reusing POST would have been wrong: it
+re-derives the start weight from the latest log, so nudging a target from 80 kg
+to 78 kg would silently reset the baseline and wipe out visible progress.
+
+The two operations are now distinct, and the editor presents them as such:
+
+- `PATCH /goals/active` — move the target. `start_weight_kg` and `start_date`
+  are untouched and the schema refuses them outright.
+- `POST /goals` — start over, re-anchoring on the current weight. Progress
+  resets, deliberately, behind a confirmation step.
+
+This is a §14.1 item 3 contract addition. §6 should gain the endpoint.
+
+## 2026-09-07 — A 0% progress bar now explains itself
+
+Reported as a bug, and it was — just not in the arithmetic. Wes's latest weight
+sat 15.87 kg above the weight his goal started from, so `progress_pct` clamped
+to 0 and rendered an empty bar with nothing to explain it. Correct, and
+indistinguishable from something broken.
+
+The goal card now shows start, now and goal side by side, and says explicitly
+when the current weight is the wrong side of the baseline. The clamp stays: a
+progress bar cannot draw -233%.
+
 ## 2026-09-07 — Phase 1: onboarding ships without the optional starting photo — **needs Wes**
 
 §12 Phase 1 lists "Onboarding flow (current weight, goal weight, optional photo)",

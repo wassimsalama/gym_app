@@ -13,11 +13,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { GoalEditor } from '@/components/GoalEditor';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { WeightChart } from '@/components/WeightChart';
-import { ApiError, getDashboard, putDailyLog, type Dashboard } from '@/lib/api';
+import {
+  ApiError,
+  getActiveGoal,
+  getDashboard,
+  putDailyLog,
+  type Dashboard,
+  type Goal,
+} from '@/lib/api';
 import {
   formatLong,
   formatRelativeDay,
@@ -49,6 +57,10 @@ export default function Weight() {
 
   const [entry, setEntry] = useState('');
   const [data, setData] = useState<Dashboard | null>(null);
+  // The dashboard carries progress but not the goal's own numbers, and the
+  // editor needs them. §6's one-request rule covers the home tab, not this one.
+  const [goalRecord, setGoalRecord] = useState<Goal | null>(null);
+  const [editingGoal, setEditingGoal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,7 +70,9 @@ export default function Weight() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      setData(await getDashboard());
+      const [dashboard, goal] = await Promise.all([getDashboard(), getActiveGoal()]);
+      setData(dashboard);
+      setGoalRecord(goal);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Could not load your trend');
@@ -73,9 +87,11 @@ export default function Weight() {
     // body — that would cascade renders on every mount.
     let active = true;
 
-    getDashboard()
-      .then((next) => {
-        if (active) setData(next);
+    Promise.all([getDashboard(), getActiveGoal()])
+      .then(([dashboard, goal]) => {
+        if (!active) return;
+        setData(dashboard);
+        setGoalRecord(goal);
       })
       .catch((err: unknown) => {
         if (active) {
@@ -155,6 +171,21 @@ export default function Weight() {
   const visible = useMemo(() => sliceSeries(series, range), [series, range]);
   const rangeDelta = useMemo(() => deltaOver(visible), [visible]);
   const unavailable = useMemo(() => unavailableRanges(series), [series]);
+
+  /**
+   * How far past the starting weight, in the wrong direction, the user now is
+   * — or null when they are somewhere between start and goal as expected.
+   * A progress bar reading 0% needs to say why.
+   */
+  const movedAwayBy = useMemo(() => {
+    const current = weight?.current_smoothed_kg;
+    if (!goalRecord || current == null) return null;
+
+    const losing = goalRecord.goal_weight_kg < goalRecord.start_weight_kg;
+    const drift = current - goalRecord.start_weight_kg;
+    const wrongWay = losing ? drift > 0 : drift < 0;
+    return wrongWay ? Math.abs(drift) : null;
+  }, [goalRecord, weight]);
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -265,20 +296,72 @@ export default function Weight() {
           )}
         </Card>
 
-        {goal ? (
+        {goal && goalRecord ? (
           <Card title="Goal">
-            <ProgressBar
-              pct={goal.progress_pct}
-              label="Progress"
-              caption={
-                goal.projected_date
+            <ProgressBar pct={goal.progress_pct} label="Progress" />
+
+            {/* The three numbers behind the bar. Without them a 0% bar is
+                indistinguishable from something broken. */}
+            <View className="mt-4 flex-row justify-between">
+              <View>
+                <Text className="text-xs text-muted">Start</Text>
+                <Text className="mt-0.5 text-base font-semibold text-white">
+                  {formatWeight(goalRecord.start_weight_kg, unit)}
+                </Text>
+              </View>
+              <View className="items-center">
+                <Text className="text-xs text-muted">Now</Text>
+                <Text className="mt-0.5 text-base font-semibold text-white">
+                  {formatWeight(weight?.current_smoothed_kg, unit)}
+                </Text>
+              </View>
+              <View className="items-end">
+                <Text className="text-xs text-muted">Goal</Text>
+                <Text className="mt-0.5 text-base font-semibold text-accent">
+                  {formatWeight(goalRecord.goal_weight_kg, unit)}
+                </Text>
+              </View>
+            </View>
+
+            <Text className="mt-4 text-xs text-muted">
+              {movedAwayBy !== null
+                ? `You're ${formatWeight(movedAwayBy, unit)} the wrong side of where this goal started, so progress reads 0%. Started ${formatLong(goalRecord.start_date)}.`
+                : goal.projected_date
                   ? `On this trend you reach it around ${formatLong(goal.projected_date)}.`
-                  : 'Not enough of a trend yet to project a date.'
-              }
-            />
+                  : 'Not enough of a trend yet to project a date.'}
+            </Text>
+
+            {goal.on_track !== null ? (
+              <Text
+                className={`mt-2 text-sm font-semibold ${
+                  goal.on_track ? 'text-accent' : 'text-danger'
+                }`}
+              >
+                {goal.on_track
+                  ? 'Ahead of your target date.'
+                  : 'Behind your target date at this rate.'}
+              </Text>
+            ) : null}
+
+            <View className="mt-4">
+              <Button title="Edit goal" variant="ghost" onPress={() => setEditingGoal(true)} />
+            </View>
           </Card>
         ) : null}
       </ScrollView>
+
+      {goalRecord ? (
+        <GoalEditor
+          // Remounting on open re-seeds the form from the current goal.
+          key={editingGoal ? 'goal-editor-open' : 'goal-editor-closed'}
+          visible={editingGoal}
+          goal={goalRecord}
+          unit={unit}
+          currentKg={weight?.current_smoothed_kg ?? null}
+          onClose={() => setEditingGoal(false)}
+          onSaved={load}
+        />
+      ) : null}
 
       <Modal
         visible={calendarOpen}
@@ -308,6 +391,7 @@ export default function Weight() {
               marked={loggedDates}
               onSelect={pickDate}
               onMonthChange={setVisibleMonth}
+              maxDate={today()}
             />
 
             <Text className="mt-4 text-xs text-muted">

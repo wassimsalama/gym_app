@@ -22,6 +22,23 @@ class GoalCreate(BaseModel):
     target_date: date | None = None
 
 
+class GoalUpdate(BaseModel):
+    """Body of `PATCH /goals/active`.
+
+    Changing where you are heading is not the same as starting over, so this
+    deliberately cannot touch `start_weight_kg` or `start_date` — editing a
+    target must not silently reset the baseline progress is measured from.
+    Re-baselining is `POST /goals`, which is an explicit new goal.
+
+    Unset fields are left alone; `target_date: null` clears the date.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    goal_weight_kg: Decimal | None = Field(default=None, gt=0, le=MAX_BODY_WEIGHT_KG)
+    target_date: date | None = None
+
+
 class GoalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

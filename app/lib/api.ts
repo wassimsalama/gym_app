@@ -61,7 +61,7 @@ export class ApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   signal?: AbortSignal;
   /** Skip the Authorization header (only /health needs this). */
@@ -137,6 +137,7 @@ export const api = {
   get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { method: 'GET', signal }),
   post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body }),
   put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body }),
+  patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
@@ -214,8 +215,17 @@ export const getDailyLogs = (from: IsoDate, to: IsoDate) =>
 
 export const getDashboard = () => api.get<Dashboard>('/dashboard');
 
+/** Opens a new goal, closing any active one and re-baselining on the latest weight. */
 export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null) =>
   api.post<Goal>('/goals', { goal_weight_kg, ...(target_date ? { target_date } : {}) });
+
+/**
+ * Moves the target of the goal already in flight. Cannot touch the baseline —
+ * editing where you're heading must not reset how far you've come.
+ * Omitted keys are left alone; `target_date: null` clears the date.
+ */
+export const updateGoal = (patch: { goal_weight_kg?: number; target_date?: IsoDate | null }) =>
+  api.patch<Goal>('/goals/active', patch);
 
 /** Resolves to null rather than throwing when no goal has been set yet. */
 export async function getActiveGoal(): Promise<Goal | null> {
