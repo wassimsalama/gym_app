@@ -134,6 +134,11 @@ Nothing else to do — the API runs its own migrations on start.
 3. **Settings → Networking → Generate Domain.** Note the URL; the web build
    needs it.
 
+   Check the domain's **target port** matches the `PORT` Railway injected —
+   the logs show it as `Uvicorn running on http://0.0.0.0:<port>`. A mismatch
+   gives `502 Application failed to respond` in front of a perfectly healthy
+   process, which reads like a crash and is not one.
+
 4. Check it: `curl https://<your-api>.up.railway.app/health` → `{"status":"ok"}`
 
 ---

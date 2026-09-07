@@ -30,9 +30,16 @@ COPY api/alembic ./alembic
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Railway and friends inject the port to listen on.
+# The host injects the port to listen on; the app follows it, whatever it is.
+#
+# Deliberately no EXPOSE. Railway reads EXPOSE as a hint for which port to route
+# the public domain to, so declaring 8000 here while it injected PORT=8081 made
+# the edge knock on a port nothing was listening on — a 502 in front of a
+# perfectly healthy process. One source of truth is better than two that can
+# disagree.
+#
+# The default only covers `docker run` with no PORT set.
 ENV PORT=8000
-EXPOSE 8000
 
 # Migrations run before the server accepts traffic, so a deploy can never serve
 # requests against a schema it does not expect. Alembic is idempotent, so a
