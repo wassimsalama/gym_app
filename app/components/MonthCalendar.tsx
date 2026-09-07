@@ -7,9 +7,7 @@ import {
   daysInMonth,
   firstWeekdayOfMonth,
   formatMonth,
-  isFuture,
   startOfMonth,
-  today,
   type IsoDate,
 } from '@/lib/dates';
 
@@ -21,8 +19,10 @@ type Props = {
   marked?: Set<IsoDate>;
   onSelect: (date: IsoDate) => void;
   onMonthChange: (month: IsoDate) => void;
-  /** Nothing later than this is selectable. Defaults to today. */
+  /** Latest selectable day. Omit for no upper bound (e.g. a target date). */
   maxDate?: IsoDate;
+  /** Earliest selectable day. Omit for no lower bound (e.g. backfilling). */
+  minDate?: IsoDate;
 };
 
 // Monday-first, matching the Monday-anchored week the volume rings use (§7.6).
@@ -41,9 +41,10 @@ export function MonthCalendar({
   marked,
   onSelect,
   onMonthChange,
-  maxDate = today(),
+  maxDate,
+  minDate,
 }: Props) {
-  const { cells, canGoNext } = useMemo(() => {
+  const { cells, canGoNext, canGoPrev } = useMemo(() => {
     const first = startOfMonth(month);
     const lead = firstWeekdayOfMonth(first);
     const total = daysInMonth(first);
@@ -51,18 +52,25 @@ export function MonthCalendar({
     const days: (IsoDate | null)[] = Array.from({ length: lead }, () => null);
     for (let i = 0; i < total; i += 1) days.push(addDays(first, i));
 
+    const nextMonth = startOfMonth(addMonths(first, 1));
+    const prevMonthEnd = addDays(first, -1);
+
     return {
       cells: days,
-      // Never page into a month that is entirely in the future.
-      canGoNext: !isFuture(startOfMonth(addMonths(first, 1)), maxDate),
+      // Don't page into a month with nothing selectable in it.
+      canGoNext: maxDate === undefined || nextMonth <= maxDate,
+      canGoPrev: minDate === undefined || prevMonthEnd >= minDate,
     };
-  }, [month, maxDate]);
+  }, [month, maxDate, minDate]);
 
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between">
         <Pressable
-          className="h-10 w-10 items-center justify-center rounded-full active:bg-line"
+          className={`h-10 w-10 items-center justify-center rounded-full ${
+            canGoPrev ? 'active:bg-line' : 'opacity-25'
+          }`}
+          disabled={!canGoPrev}
           onPress={() => onMonthChange(addMonths(month, -1))}
           accessibilityLabel="Previous month"
         >
@@ -97,7 +105,8 @@ export function MonthCalendar({
             return <View key={`pad-${index}`} className="h-11 w-[14.28%]" />;
           }
 
-          const disabled = isFuture(date, maxDate);
+          const disabled =
+            (maxDate !== undefined && date > maxDate) || (minDate !== undefined && date < minDate);
           const isSelected = date === selected;
           const hasData = marked?.has(date) ?? false;
           const dayNumber = Number(date.slice(-2));

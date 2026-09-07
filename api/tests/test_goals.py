@@ -128,3 +128,107 @@ def test_one_users_new_goal_does_not_close_anothers(client: TestClient) -> None:
 
     # The second user's goal must not have abandoned the first user's.
     assert client.get("/goals/active", headers=first).status_code == 200
+
+
+# --- PATCH /goals/active ---------------------------------------------------
+
+
+def test_patch_requires_authentication(client: TestClient) -> None:
+    assert client.patch("/goals/active", json={"goal_weight_kg": 78}).status_code == 401
+
+
+def test_patch_404s_without_an_active_goal(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    resp = client.patch("/goals/active", json={"goal_weight_kg": 78}, headers=auth_headers)
+    assert resp.status_code == 404
+
+
+def test_patch_changes_the_target_without_moving_the_baseline(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """The whole reason PATCH exists: editing a target must not reset progress."""
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    created = client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers).json()
+
+    updated = client.patch(
+        "/goals/active", json={"goal_weight_kg": 78}, headers=auth_headers
+    ).json()
+
+    assert updated["id"] == created["id"]  # same goal, not a new one
+    assert Decimal(updated["goal_weight_kg"]) == Decimal("78.00")
+    assert Decimal(updated["start_weight_kg"]) == Decimal("90.00")
+    assert updated["start_date"] == "2026-09-01"
+
+
+def test_patch_leaves_the_baseline_alone_even_after_newer_weights(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)
+    log_weight(client, auth_headers, "2026-09-20", 86.0)
+
+    updated = client.patch(
+        "/goals/active", json={"goal_weight_kg": 79}, headers=auth_headers
+    ).json()
+    assert Decimal(updated["start_weight_kg"]) == Decimal("90.00")
+
+
+def test_patch_can_set_and_clear_a_target_date(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)
+
+    with_date = client.patch(
+        "/goals/active", json={"target_date": "2026-12-01"}, headers=auth_headers
+    ).json()
+    assert with_date["target_date"] == "2026-12-01"
+
+    cleared = client.patch("/goals/active", json={"target_date": None}, headers=auth_headers).json()
+    assert cleared["target_date"] is None
+
+
+def test_patch_leaves_unmentioned_fields_untouched(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    client.post(
+        "/goals", json={"goal_weight_kg": 80, "target_date": "2026-12-01"}, headers=auth_headers
+    )
+
+    updated = client.patch(
+        "/goals/active", json={"goal_weight_kg": 78}, headers=auth_headers
+    ).json()
+    assert updated["target_date"] == "2026-12-01"
+
+
+def test_patch_rejects_an_empty_body_and_bad_values(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)
+
+    assert client.patch("/goals/active", json={}, headers=auth_headers).status_code == 422
+    assert (
+        client.patch("/goals/active", json={"goal_weight_kg": 0}, headers=auth_headers).status_code
+        == 422
+    )
+    assert (
+        client.patch(
+            "/goals/active", json={"start_weight_kg": 50}, headers=auth_headers
+        ).status_code
+        == 422
+    )
+
+
+def test_patch_cannot_reach_another_users_goal(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    log_weight(client, auth_headers, "2026-09-01", 90.0)
+    client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)
+
+    other = {"Authorization": f"Bearer {make_token()}"}
+    assert (
+        client.patch("/goals/active", json={"goal_weight_kg": 60}, headers=other).status_code == 404
+    )
