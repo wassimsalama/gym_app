@@ -88,19 +88,36 @@ def check_auth() -> None:
 
 
 def check_storage() -> None:
+    """Confirm the bucket exists, not merely that a name was configured.
+
+    A named bucket that does not exist fails later as an opaque 502, because
+    the API deliberately never echoes the provider's response — that body can
+    contain the service key. This is a local diagnostic, so it says what is
+    actually wrong.
+    """
+    settings = get_settings()
     if not storage.is_configured():
+        report(WARN, "photo storage", "not configured — photo endpoints will return 503")
+        return
+
+    wanted = settings.supabase_storage_bucket
+    try:
+        buckets = storage.list_buckets()
+    except Exception as exc:  # noqa: BLE001 — the type is the useful part
+        report(BAD, "photo storage", f"cannot reach storage: {type(exc).__name__}")
+        return
+
+    if wanted not in buckets:
+        found = ", ".join(sorted(buckets)) if buckets else "none exist on this project"
         report(
-            WARN,
+            BAD,
             "photo storage",
-            "not configured — photo endpoints will return 503",
+            f"bucket '{wanted}' not found (buckets: {found}) — "
+            "create it under Storage -> New bucket, with Public OFF",
         )
         return
-    report(
-        OK,
-        "photo storage",
-        f"bucket '{get_settings().supabase_storage_bucket}' "
-        "(run check_storage.py to prove it round-trips)",
-    )
+
+    report(OK, "photo storage", f"bucket '{wanted}' exists")
 
 
 def check_admins() -> None:

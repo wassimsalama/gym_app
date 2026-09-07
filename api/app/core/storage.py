@@ -93,6 +93,13 @@ def _raise_for_status(response: httpx.Response, action: str) -> None:
     )
 
 
+def list_buckets() -> list[str]:
+    """Bucket names on the project. For diagnostics — the API never needs this."""
+    response = _client().get("/bucket")
+    _raise_for_status(response, "list buckets")
+    return [bucket["name"] for bucket in response.json()]
+
+
 def build_key(user_id: uuid.UUID) -> str:
     """`{user_id}/{uuid}.jpg` (spec §9).
 
