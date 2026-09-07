@@ -80,3 +80,15 @@ export function stepKg(kg: number, direction: 1 | -1, unit: Unit): number {
   const next = fromKg(kg, unit) + direction * stepInUnit;
   return round(toKg(Math.max(next, 0), unit), 3);
 }
+
+/** Rep steppers move one at a time and never below a single rep. */
+export function stepReps(reps: number, direction: 1 | -1): number {
+  return Math.max(1, Math.min(100, reps + direction));
+}
+
+/** Parse a typed rep count; null when it is not a usable whole number. */
+export function parseReps(raw: string): number | null {
+  const value = Number(raw.trim());
+  if (!Number.isFinite(value) || value < 1 || value > 100) return null;
+  return Math.round(value);
+}
