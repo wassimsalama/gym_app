@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.*
+.env.local
+!.env.example
+
+# VS Code Local History snapshots every edit, including .env files, under
+# timestamped names that the patterns above do not match. Never commit these.
+.history/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Data
+scripts/.cache/
