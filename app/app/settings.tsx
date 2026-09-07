@@ -14,8 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { PasswordInput } from '@/components/PasswordInput';
 import { deleteAccount } from '@/lib/api';
-import { signOut, supabase, useAuth } from '@/lib/auth';
+import { signOut, supabase, updatePassword, useAuth } from '@/lib/auth';
 import { clearCache } from '@/lib/cache';
 import { describeError, type DisplayError } from '@/lib/errors';
 import { clearQueue } from '@/lib/sync';
@@ -30,7 +31,35 @@ export default function Settings() {
   const [confirming, setConfirming] = useState(false);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [repeated, setRepeated] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<DisplayError | null>(null);
+
+  async function changePassword() {
+    if (newPassword !== repeated) {
+      setPasswordError('The two passwords do not match');
+      return;
+    }
+
+    setSavingPassword(true);
+    setPasswordError(null);
+
+    const { error: failure } = await updatePassword(newPassword);
+    if (failure) {
+      setPasswordError(failure.message);
+    } else {
+      setChanged(true);
+      setChangingPassword(false);
+      setNewPassword('');
+      setRepeated('');
+    }
+    setSavingPassword(false);
+  }
 
   function openPrivacy() {
     // The page ships inside the web build, so on the web it is a relative path
@@ -85,6 +114,57 @@ export default function Settings() {
           <View className="mt-4">
             <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
           </View>
+        </Card>
+
+        <Card title="Password">
+          {changed ? <Text className="mb-3 text-sm text-accent">Password updated.</Text> : null}
+          {passwordError ? <Text className="mb-3 text-sm text-danger">{passwordError}</Text> : null}
+
+          {changingPassword ? (
+            <>
+              <View className="gap-3">
+                <PasswordInput
+                  placeholder="New password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <PasswordInput
+                  placeholder="Repeat it"
+                  autoComplete="new-password"
+                  value={repeated}
+                  onChangeText={setRepeated}
+                />
+              </View>
+              <View className="mt-4 gap-2">
+                <Button
+                  title="Save"
+                  onPress={changePassword}
+                  loading={savingPassword}
+                  disabled={newPassword.length < 6 || newPassword !== repeated}
+                />
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => {
+                    setChangingPassword(false);
+                    setNewPassword('');
+                    setRepeated('');
+                    setPasswordError(null);
+                  }}
+                />
+              </View>
+            </>
+          ) : (
+            <Button
+              title="Change password"
+              variant="ghost"
+              onPress={() => {
+                setChangingPassword(true);
+                setChanged(false);
+              }}
+            />
+          )}
         </Card>
 
         <Card title="Privacy">
