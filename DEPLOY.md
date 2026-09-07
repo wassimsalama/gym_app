@@ -20,15 +20,29 @@ the API must exist and have a URL before you build the site.
 You already have the project. Use its database rather than adding another
 service.
 
-**Supabase → Settings → Database → Connection string → URI.** Take the one
-marked *Session pooler* if offered; Railway holds long-lived connections and the
-pooler handles them better than a direct connection.
+**Click the green "Connect" button at the top of the project dashboard.** It is
+not under Settings — Supabase moved it, and it is easy to hunt for in the wrong
+place.
+
+In the dialog, choose **Session pooler** (port `5432`). Railway holds long-lived
+connections, which is what the session pooler is for; the transaction pooler on
+`6543` is for serverless.
+
+Direct link, substituting your project ref:
+
+```
+https://supabase.com/dashboard/project/<ref>/?showConnect=true&method=session
+```
 
 It will look like:
 
 ```
-postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+postgres://postgres.<ref>:[YOUR-PASSWORD]@aws-<region>.pooler.supabase.com:5432/postgres
 ```
+
+Replace `[YOUR-PASSWORD]` with your database password — the dialog shows a
+placeholder, not the real thing. If you have forgotten it, reset it under
+**Settings → Database → Database password**.
 
 SQLAlchemy needs its driver named, so change the scheme:
 
@@ -100,10 +114,16 @@ subdomain. DNS is automatic when the domain is on the same account.
 
 Both matter more once strangers can reach the site.
 
-- **Authentication → Sign In / Providers → Email → Confirm email: ON.**
+- **Authentication → Providers → Email → Confirm email: ON.**
   Otherwise anyone can register with an address they do not own.
-- **Authentication → Rate Limits** — sign-up and sign-in never touch the API,
-  so they cannot be throttled there. This is the only place that governs them.
+- **Authentication → Rate Limits** — sign-up and sign-in never touch the API, so
+  they cannot be throttled there. This is the only place that governs them. (In
+  some dashboard versions this sits under **Authentication → Attack Protection**.)
+
+Supabase's built-in mailer is rate limited to a handful of messages an hour and
+is only meant for testing. If your family hit that, add your own SMTP under
+**Authentication → Emails → SMTP Settings** — a free Resend or Brevo account is
+enough.
 
 ---
 
