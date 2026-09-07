@@ -107,6 +107,14 @@ Nothing else to do — the API runs its own migrations on start.
 1. **railway.app** → New Project → Deploy from GitHub repo → this repo.
    It reads `railway.json` and builds `api/Dockerfile`. No other configuration.
 
+   The Dockerfile expects the **repository root** as build context, which is
+   what Railway uses, so every `COPY` path starts with `api/`. Building it with
+   `api/` as the context fails — to reproduce a Railway build locally:
+
+   ```bash
+   docker build -f api/Dockerfile -t gym-api .
+   ```
+
 2. **Variables** — set these before the first deploy finishes:
 
    | Variable | Value |
