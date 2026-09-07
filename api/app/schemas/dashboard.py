@@ -32,6 +32,11 @@ class GoalBlock(BaseModel):
     progress_pct: float
     projected_date: date | None
     on_track: bool | None
+    # The two numbers the percentage is derived from. Without them a 0% bar is
+    # unreadable, and §6 gives the home tab exactly one request to work with —
+    # so they travel here rather than forcing a second call to /goals/active.
+    start_weight_kg: float
+    goal_weight_kg: float
 
 
 class TdeeBlock(BaseModel):

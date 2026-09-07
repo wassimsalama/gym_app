@@ -68,6 +68,32 @@ def test_days_without_a_weight_are_absent_from_the_series(
     assert [p["date"] for p in series] == ["2026-09-01"]
 
 
+def test_goal_block_carries_the_numbers_behind_the_percentage(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A 0% bar is unreadable without them, and the home tab gets one request."""
+    seed(client, auth_headers, [("2026-09-01", 90.0)])
+    client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)
+
+    goal = client.get("/dashboard", headers=auth_headers).json()["goal"]
+    assert goal["start_weight_kg"] == 90.0
+    assert goal["goal_weight_kg"] == 80.0
+
+
+def test_progress_is_zero_when_moving_away_from_the_goal(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """Regression: gaining while cutting must clamp, and the client must be
+    able to tell that apart from a genuine standing start."""
+    seed(client, auth_headers, [("2026-09-01", 90.0)])
+    client.post("/goals", json={"goal_weight_kg": 77}, headers=auth_headers)
+    seed(client, auth_headers, [("2026-09-07", 104.0)])
+
+    goal = client.get("/dashboard", headers=auth_headers).json()["goal"]
+    assert goal["progress_pct"] == 0.0
+    assert goal["start_weight_kg"] == 90.0  # lets the app say "you are above this"
+
+
 def test_goal_block_reports_progress(client: TestClient, auth_headers: dict[str, str]) -> None:
     seed(client, auth_headers, [("2026-09-01", 90.0)])
     client.post("/goals", json={"goal_weight_kg": 80}, headers=auth_headers)

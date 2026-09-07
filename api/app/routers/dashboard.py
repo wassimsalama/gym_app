@@ -94,6 +94,8 @@ def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
             progress_pct=evaluated.progress_pct,
             projected_date=evaluated.projected_date,
             on_track=evaluated.on_track,
+            start_weight_kg=float(goal.start_weight_kg),
+            goal_weight_kg=float(goal.goal_weight_kg),
         )
 
     return Dashboard(

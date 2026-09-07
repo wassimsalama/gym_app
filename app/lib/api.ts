@@ -196,6 +196,8 @@ export type Dashboard = {
     progress_pct: number;
     projected_date: IsoDate | null;
     on_track: boolean | null;
+    start_weight_kg: number;
+    goal_weight_kg: number;
   } | null;
   tdee: { estimate_kcal: number | null; days_of_data: number; reliable: boolean };
   volume: { muscle_group: string; sets_this_week: number; weekly_target: number }[];

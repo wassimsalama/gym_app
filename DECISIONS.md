@@ -16,6 +16,26 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — A stale baseline now offers its own fix; `goal` block gained two fields — **needs Wes**
+
+Reported as "the progress bar says 0". The arithmetic was right and the outcome
+was still broken. Wes onboarded at 200 lb, set a 170 lb target, then logged
+230 lb — so the baseline sat 30 lb behind him. The bar clamps to 0% and, worse,
+*stays* there: losing 20 lb still reads 0%, because progress is measured from
+200 lb. Real progress would have been invisible for weeks.
+
+Re-anchoring already existed (`POST /goals`) but was buried inside the goal
+editor, so the app never offered it in the one state that needs it. The goal
+card now detects the case and offers a one-tap restart from the current weight,
+keeping the same target.
+
+To let the home tab explain the same thing inside §6's single request, the
+dashboard `goal` block now also carries `start_weight_kg` and `goal_weight_kg`.
+Additive, but still a §14.1 item 3 contract change — §6 should be updated.
+
+The clamp itself stays. A progress bar cannot draw -233%, and un-clamping would
+trade an unhelpful number for a nonsensical one.
+
 ## 2026-09-07 — `PATCH /goals/active` added to the contract — **needs Wes**
 
 §6 defines only `POST /goals` and `GET /goals/active`, so there was no way to
