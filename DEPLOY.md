@@ -158,7 +158,24 @@ subdomain. DNS is automatic when the domain is on the same account.
 
 ---
 
-## 4. Two Supabase settings
+## 4. Protecting accounts from password guessing
+
+Someone who knows a user's email can try passwords against it. The app slows
+this down in the sign-in form, but **that is a deterrent, not a defence** — an
+attacker calls Supabase's auth endpoint directly, where no app code runs. These
+settings are what actually stop it, and all four are free.
+
+| Setting | Where | Why |
+| --- | --- | --- |
+| **Auth rate limits** | Authentication → Rate Limits | Caps sign-in attempts per IP per hour. The single most effective control; the default is generous, so lower it. |
+| **Leaked password protection** | Authentication → Policies (or Providers → Email) | Rejects passwords found in known breaches, via HaveIBeenPwned. Stops credential stuffing, which is far more common than guessing. |
+| **Minimum password length / required characters** | Authentication → Policies | Raise from the default 6. Length is what matters. |
+| **CAPTCHA** | Authentication → Attack Protection | hCaptcha or **Cloudflare Turnstile**. Turnstile is free and you already have a Cloudflare account. This is the one that actually defeats automated guessing — the others slow it, this stops it. |
+
+Enabling CAPTCHA also needs a small client change to pass the token, so tell me
+if you turn it on and I will wire it up.
+
+## 5. Two more Supabase settings
 
 Both matter more once strangers can reach the site.
 
