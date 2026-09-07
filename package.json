@@ -6,7 +6,7 @@
     "web": "npm --prefix app run web",
     "ios": "npm --prefix app run ios",
     "start": "npm --prefix app run start",
-    "api": "api/.venv/bin/uvicorn app.main:app --app-dir api --host 0.0.0.0 --port 8000 --reload",
+    "api": "api/.venv/bin/uvicorn app.main:app --app-dir api --host 0.0.0.0 --port 8000 --reload --reload-include '.env'",
     "db": "docker compose up -d",
     "test": "cd api && ./.venv/bin/pytest",
     "check": "npm run check:api && npm run check:app",
