@@ -209,12 +209,25 @@ Environment variables (**Settings → Environment variables**, Production):
 | `EXPO_PUBLIC_API_URL` | your Railway URL |
 | `EXPO_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | the anon key |
-| `NODE_VERSION` | `20` |
+| `NODE_VERSION` | `22` |
 
 These are required, not optional. `app/.env` and `app/.env.production` are
 gitignored, so Cloudflare's build has no other source for them — and
 `build:pages` runs the bundle verifier, which fails the build rather than
 publishing a site that points nowhere.
+
+`NODE_VERSION` is 22 rather than 20 because Wrangler requires it. Expo is happy
+either way.
+
+### If Cloudflare gave you a Worker instead of Pages
+
+Newer Cloudflare accounts default to Workers with static assets, where the
+deploy command is `npx wrangler deploy` and the settings above do not appear.
+That path uses `wrangler.jsonc` in the repo root, which is already written —
+including the single-page-application fallback, without which a direct visit to
+`/reset-password` returns 404. Pages infers that; a Worker does not.
+
+Wrangler needs Node 22 locally too.
 
 ### Domain
 

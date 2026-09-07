@@ -1,0 +1,23 @@
+{
+  // Only needed if the site is deployed as a Worker with static assets rather
+  // than as a Cloudflare Pages project. Pages needs no config: it takes a build
+  // command and an output directory.
+  //
+  //   npm run build:web          # build and verify the bundle
+  //   npx wrangler deploy        # publish app/dist
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stallpoint",
+  "compatibility_date": "2026-09-08",
+
+  "assets": {
+    "directory": "./app/dist",
+
+    // expo-router produces a single-page app: every route is served by
+    // index.html and resolved in the browser. Without this, a direct visit to
+    // /reset-password — which is exactly where password-reset emails land —
+    // returns 404, because no such file exists on disk.
+    //
+    // Cloudflare Pages infers this. A Worker does not.
+    "not_found_handling": "single-page-application"
+  }
+}
