@@ -58,6 +58,28 @@ class Suggestion(BaseModel):
     evidence: dict
 
 
+class BestLift(BaseModel):
+    exercise_id: int
+    exercise_name: str
+    e1rm: float
+    previous_best: float | None
+    was_a_record: bool
+
+
+class Recap(BaseModel):
+    """The last completed Mon–Sun week (spec §7.7)."""
+
+    week_start: date
+    week_end: date
+    sessions: int
+    total_sets: int
+    total_volume_kg: float
+    weight_delta_kg: float | None
+    days_trained: int
+    days_logged: int
+    best_lift: BestLift | None
+
+
 class Dashboard(BaseModel):
     streaks: Streaks
     weight: WeightBlock
@@ -68,4 +90,4 @@ class Dashboard(BaseModel):
     volume: list[VolumeRing]
     prs_recent: list[dict]
     suggestions: list[Suggestion]
-    recap: dict | None
+    recap: Recap | None

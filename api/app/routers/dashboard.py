@@ -5,16 +5,20 @@ from sqlalchemy import func, select
 
 from app.core.auth import CurrentUser, DbSession
 from app.models import DailyLog, Exercise, Goal, SetLog, WorkoutSession
+from app.routers import _dashboard_data as data
 from app.schemas.dashboard import (
+    BestLift,
     Dashboard,
     GoalBlock,
+    Recap,
     Streaks,
+    Suggestion,
     TdeeBlock,
     VolumeRing,
     WeightBlock,
     WeightSeriesPoint,
 )
-from app.services import projection, streaks, tdee
+from app.services import plateaus, projection, recap, streaks, suggestions, tdee
 from app.services.prs import EPLEY_REP_CAP
 from app.services.smoothing import smooth_series
 
@@ -154,6 +158,34 @@ def get_dashboard(
     ).all()
     estimate = tdee.estimate(points, dict(calorie_rows), as_of=today)
 
+    rings = streaks.volume_rings(sets_by_group=sets_by_group)
+
+    # --- suggestions -------------------------------------------------------
+    calorie_ctx, mean_calories = data.calorie_context(
+        db, user.id, today, estimate.estimate_kcal if estimate.reliable else None
+    )
+    found_plateaus = plateaus.detect(
+        data.exercise_histories(db, user.id, today),
+        calorie=calorie_ctx,
+        recovery=data.recovery_context(db, user.id, today),
+    )
+    assembled = suggestions.assemble(
+        suggestions.from_plateaus(found_plateaus),
+        suggestions.from_tdee(estimate, mean_calories),
+        suggestions.from_volume(rings, trained_this_week=bool(sets_by_group)),
+        suggestions.from_goal(
+            progress_pct=goal_block.progress_pct if goal_block else None,
+            projected_date=(
+                goal_block.projected_date.isoformat()
+                if goal_block and goal_block.projected_date
+                else None
+            ),
+            target_date=goal.target_date.isoformat() if goal and goal.target_date else None,
+            on_track=goal_block.on_track if goal_block else None,
+        ),
+        suggestions.from_logging(logged_14=counted.logged_14),
+    )
+
     return Dashboard(
         streaks=Streaks(logged_14=counted.logged_14, trained_14=counted.trained_14),
         weight=WeightBlock(
@@ -176,11 +208,84 @@ def get_dashboard(
                 sets_this_week=ring.sets_this_week,
                 weekly_target=ring.weekly_target,
             )
-            for ring in streaks.volume_rings(sets_by_group=sets_by_group)
+            for ring in rings
         ],
         prs_recent=_recent_prs(db, user.id, today),
-        suggestions=[],
-        recap=None,
+        suggestions=[
+            Suggestion(id=s.id, kind=s.kind, message=s.message, evidence=s.evidence)
+            for s in assembled
+        ],
+        recap=_build_recap(db, user.id, today, points),
+    )
+
+
+def _build_recap(db, user_id, today: date, points: list) -> Recap | None:
+    """The last completed Mon–Sun week (spec §7.7).
+
+    Returned whenever there is a finished week with anything in it, rather than
+    only on Sundays — a recap the user cannot look back at on Tuesday is a
+    recap they will mostly never see.
+    """
+    start, end = recap.last_completed_week(today)
+
+    session_dates, set_volumes = data.week_totals(db, user_id, start, end)
+    logged = set(
+        db.scalars(
+            select(DailyLog.log_date).where(
+                DailyLog.user_id == user_id,
+                DailyLog.log_date >= start,
+                DailyLog.log_date <= end,
+            )
+        )
+    )
+    trained = set(
+        db.scalars(
+            select(DailyLog.log_date).where(
+                DailyLog.user_id == user_id,
+                DailyLog.trained.is_(True),
+                DailyLog.log_date >= start,
+                DailyLog.log_date <= end,
+            )
+        )
+    ) | set(session_dates)
+
+    if not logged and not session_dates:
+        return None
+
+    in_week = [p for p in points if start <= p.date <= end]
+    built = recap.build(
+        as_of=today,
+        session_dates=session_dates,
+        set_volumes=set_volumes,
+        logged_dates=logged,
+        trained_dates=trained,
+        smoothed_start=in_week[0].smoothed_kg if in_week else None,
+        smoothed_end=in_week[-1].smoothed_kg if in_week else None,
+        best_lift=data.week_best_lift(db, user_id, start, end),
+    )
+
+    return Recap(
+        week_start=built.week_start,
+        week_end=built.week_end,
+        sessions=built.sessions,
+        total_sets=built.total_sets,
+        total_volume_kg=round(built.total_volume_kg, 1),
+        weight_delta_kg=(
+            round(built.weight_delta_kg, 2) if built.weight_delta_kg is not None else None
+        ),
+        days_trained=built.days_trained,
+        days_logged=built.days_logged,
+        best_lift=(
+            BestLift(
+                exercise_id=built.best_lift.exercise_id,
+                exercise_name=built.best_lift.exercise_name,
+                e1rm=built.best_lift.e1rm,
+                previous_best=built.best_lift.previous_best,
+                was_a_record=built.best_lift.was_a_record,
+            )
+            if built.best_lift
+            else None
+        ),
     )
 
 
