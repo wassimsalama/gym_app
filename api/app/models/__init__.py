@@ -1,3 +1,4 @@
+from app.models.activity import UserActivity
 from app.models.base import Base
 from app.models.daily_log import DailyLog
 from app.models.exercise import MUSCLE_GROUPS, Exercise
@@ -9,6 +10,7 @@ from app.models.workout import SetLog, WorkoutSession
 __all__ = [
     "MUSCLE_GROUPS",
     "Base",
+    "UserActivity",
     "DailyLog",
     "Exercise",
     "Goal",

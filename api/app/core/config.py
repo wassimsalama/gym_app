@@ -61,11 +61,20 @@ class Settings(BaseSettings):
     #: proxy in front, any client could spoof its address and evade every limit.
     trust_proxy_headers: bool = False
 
+    #: Comma-separated Supabase user ids allowed to read /admin/metrics.
+    #: Empty means nobody, which is the safe default — an unset variable must
+    #: never mean "everyone".
+    admin_user_ids: str = ""
+
     sql_echo: bool = Field(default=False)
 
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def admins(self) -> set[str]:
+        return {a.strip() for a in self.admin_user_ids.split(",") if a.strip()}
 
     @property
     def dev_origin_regex(self) -> str | None:

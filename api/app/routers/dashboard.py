@@ -2,10 +2,11 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.auth import DbSession
 from app.core.limits import ReadUser
-from app.models import DailyLog, Exercise, Goal, SetLog, WorkoutSession
+from app.models import DailyLog, Exercise, Goal, SetLog, UserActivity, WorkoutSession
 from app.routers import _dashboard_data as data
 from app.schemas.dashboard import (
     BestLift,
@@ -50,6 +51,16 @@ def get_dashboard(
     UTC, and streaks, Monday-anchored volume weeks and the recap all need a real
     calendar day. It matches how `PUT /daily-logs/{date}` already works.
     """
+    # The home tab makes exactly one request per app open, so this is the
+    # natural place to note that the user was here. ON CONFLICT DO NOTHING makes
+    # it at most one write per user per day, whatever else they do.
+    db.execute(
+        pg_insert(UserActivity)
+        .values(user_id=user.id, active_on=today)
+        .on_conflict_do_nothing(index_elements=["user_id", "active_on"])
+    )
+    db.commit()
+
     goal = db.scalar(
         select(Goal)
         .where(Goal.user_id == user.id, Goal.status == "active")
