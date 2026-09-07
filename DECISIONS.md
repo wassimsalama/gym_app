@@ -16,6 +16,34 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Sign-in throttling, and being honest about what it is
+
+Wes asked for protection against someone repeatedly guessing a user's password.
+
+Built: per-email, per-device progressive lockout in the sign-in form — four
+free attempts, then 30s, 60s, 5m, 15m, counting down visibly so the person
+locked out knows what is happening rather than watching a dead form.
+
+**It is a deterrent, not a security control, and the code says so.** An
+attacker guessing passwords does not use the form; they call Supabase's auth
+endpoint directly, where none of this runs. Claiming otherwise would be worse
+than not building it, because it invites the belief that the problem is
+handled.
+
+What it genuinely buys: someone poking at a friend's account on a shared laptop
+gives up, a stuck client cannot loop against the auth endpoint, and a locked-out
+user gets told why.
+
+The real defences are all Supabase dashboard settings and all free — per-IP
+auth rate limits, leaked-password protection via HaveIBeenPwned, a raised
+minimum password length, and a CAPTCHA. Turnstile is the one that actually
+defeats automated guessing rather than slowing it, and it is free on the
+Cloudflare account already in use. Documented in DEPLOY.md; enabling CAPTCHA
+needs a small client change to pass the token.
+
+Storage failures degrade to no throttling rather than blocking sign-in. A
+device with storage disabled should still be able to log in.
+
 ## 2026-09-07 — Password reset and a reveal toggle — **Wes's request**
 
 §10 specified email/password sign-in and said nothing about recovery, so the

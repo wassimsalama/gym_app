@@ -1,11 +1,12 @@
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { PasswordInput } from '@/components/PasswordInput';
 import { signIn } from '@/lib/auth';
+import { describeWait, recordFailure, recordSuccess, secondsRemaining } from '@/lib/loginThrottle';
 
 export default function SignIn() {
   const insets = useSafeAreaInsets();
@@ -13,14 +14,55 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lockedFor, setLockedFor] = useState(0);
+
+  const isLocked = lockedFor > 0;
+
+  // Count the lockout down so the button re-enables on its own, rather than
+  // leaving someone staring at a dead form wondering if it is broken. The
+  // effect depends only on *whether* a lockout is running, not its value, so
+  // the interval is created once rather than restarted every second.
+  useEffect(() => {
+    if (!isLocked) return;
+
+    const timer = setInterval(() => {
+      setLockedFor((current) => {
+        const next = current - 1;
+        if (next <= 0) {
+          setError(null);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isLocked]);
 
   async function onSubmit() {
+    const wait = secondsRemaining(email);
+    if (wait > 0) {
+      setLockedFor(wait);
+      return;
+    }
+
     setBusy(true);
     setError(null);
+
     const { error: authError } = await signIn(email, password);
-    if (authError) setError(authError.message);
+
+    if (authError) {
+      const next = recordFailure(email);
+      setLockedFor(next);
+      setError(
+        next > 0 ? `Too many attempts. Try again in ${describeWait(next)}.` : authError.message,
+      );
+    } else {
+      recordSuccess(email);
+      // The auth listener in useAuth swaps the navigator; no push needed.
+    }
+
     setBusy(false);
-    // On success the auth listener in useAuth swaps the navigator; no push needed.
   }
 
   return (
@@ -58,7 +100,12 @@ export default function SignIn() {
 
         {error ? <Text className="text-sm text-danger">{error}</Text> : null}
 
-        <Button title="Sign in" onPress={onSubmit} loading={busy} disabled={!email || !password} />
+        <Button
+          title={isLocked ? `Wait ${describeWait(lockedFor)}` : 'Sign in'}
+          onPress={onSubmit}
+          loading={busy}
+          disabled={!email || !password || isLocked}
+        />
 
         <Link href="/(auth)/sign-up" asChild>
           <Text className="mt-2 text-center text-sm text-muted">
