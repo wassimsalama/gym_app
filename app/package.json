@@ -57,7 +57,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,json}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json}\"",
+    "build:web": "expo export --platform web --output-dir dist --clear"
   },
   "private": true
 }

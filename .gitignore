@@ -19,6 +19,7 @@ web-build/
 .env
 .env.*
 .env.local
+.env.production
 !.env.example
 
 # VS Code Local History snapshots every edit, including .env files, under
