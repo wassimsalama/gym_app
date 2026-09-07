@@ -181,10 +181,58 @@ in `app/dist`.
 runtime. Changing the API URL means rebuilding and re-uploading — there is no
 environment variable to edit afterwards.
 
+### Automatic deploys from GitHub
+
+Uploading `dist` by hand works, but connecting the repo means a push deploys
+the site the way it already deploys the API.
+
+**Cloudflare → Workers & Pages → Create → Pages → Connect to Git.**
+
+> A Pages project created by uploading assets **cannot be converted** to a
+> Git-connected one. If the current project was made by dragging in `dist`,
+> create a second project connected to Git, move the custom domain across, then
+> delete the first.
+
+Settings:
+
+| Field | Value |
+| --- | --- |
+| Framework preset | None |
+| Build command | `npm run build:pages` |
+| Build output directory | `app/dist` |
+| Root directory | leave blank (the repo root) |
+
+Environment variables (**Settings → Environment variables**, Production):
+
+| Variable | Value |
+| --- | --- |
+| `EXPO_PUBLIC_API_URL` | your Railway URL |
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | the anon key |
+| `NODE_VERSION` | `20` |
+
+These are required, not optional. `app/.env` and `app/.env.production` are
+gitignored, so Cloudflare's build has no other source for them — and
+`build:pages` runs the bundle verifier, which fails the build rather than
+publishing a site that points nowhere.
+
 ### Domain
 
-Cloudflare → your Pages project → **Custom domains** → add the domain or
-subdomain. DNS is automatic when the domain is on the same account.
+Cloudflare → your Pages project → **Custom domains** → add the domain and the
+`www` subdomain. DNS is automatic when the domain is on the same account.
+
+Adding a domain means updating two things elsewhere, or the site breaks in
+ways that look unrelated:
+
+- **Railway `ALLOWED_ORIGINS`** — add the new origins, comma-separated.
+  Without this the site loads and every request fails with "could not reach
+  the server".
+- **Supabase → Authentication → URL Configuration → Redirect URLs** — add
+  `https://<new-domain>/reset-password`, or password reset links are refused
+  and it looks like broken email.
+
+No rebuild is needed for a domain change. The bundle carries the *API* URL, not
+the site's own; the reset redirect reads `location.origin` at runtime.
 
 ---
 
