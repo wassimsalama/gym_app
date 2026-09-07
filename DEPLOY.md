@@ -40,6 +40,28 @@ residency is a requirement rather than a preference.
 existing project is in the wrong region, make a new one now — it costs fifteen
 minutes today and a data migration later.
 
+### Moving to a new project
+
+It is a new *project*, not a new account. Same login, `+ New project`, pick the
+region at creation.
+
+1. **Storage → New bucket** named `photos`, with *Public bucket* **off**.
+2. **Authentication → Providers → Email → Confirm email: on**.
+3. Update `api/.env`: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`.
+4. Update `app/.env`: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+5. Sign up again in the app — accounts do not carry across projects.
+6. Put your new user id in `ADMIN_USER_IDS`. Find it in **Authentication →
+   Users**, or call `/health-auth` while signed in.
+7. Verify:
+
+   ```bash
+   python scripts/check_config.py     # everything wired up
+   python scripts/check_storage.py    # photos actually round-trip
+   ```
+
+`DATABASE_URL` stays pointed at local Docker for development; only Railway needs
+the Supabase connection string.
+
 ---
 
 ## 1. Database — Supabase Postgres

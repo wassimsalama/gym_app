@@ -29,9 +29,7 @@ from app.core.certs import default_ssl_context  # noqa: E402
 from app.core.db import engine  # noqa: E402
 from app.models import MUSCLE_GROUPS, Exercise  # noqa: E402
 
-DATA_URL = (
-    "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json"
-)
+DATA_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json"
 CACHE_PATH = REPO_ROOT / "scripts" / ".cache" / "exercises.json"
 
 # free-exercise-db uses its own muscle vocabulary; collapse it onto the
@@ -106,9 +104,7 @@ def seed(records: list[dict[str, str | None]], dry_run: bool) -> tuple[int, int]
     with Session(engine) as session:
         existing = {
             (e.name or "").lower(): e
-            for e in session.scalars(
-                select(Exercise).where(Exercise.source == "seed")
-            )
+            for e in session.scalars(select(Exercise).where(Exercise.source == "seed"))
         }
         for record in records:
             current = existing.get((record["name"] or "").lower())
@@ -132,9 +128,7 @@ def seed(records: list[dict[str, str | None]], dry_run: bool) -> tuple[int, int]
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--file", type=Path, help="seed from a local JSON file")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="report changes without writing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="report changes without writing")
     args = parser.parse_args()
 
     records = normalise(load_raw(args.file))

@@ -64,7 +64,9 @@ def main() -> int:
 
     print("2. uploading, as the device would")
     request = urllib.request.Request(
-        upload_url, data=TINY_JPEG, method="PUT",
+        upload_url,
+        data=TINY_JPEG,
+        method="PUT",
         headers={"Content-Type": "image/jpeg"},
     )
     with urllib.request.urlopen(request, context=default_ssl_context()) as response:  # noqa: S310
