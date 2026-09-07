@@ -16,6 +16,39 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — `GET /dashboard?date=` — **approved by Wes**
+
+§6 forbids the server deriving "today" from UTC, and specifies `GET /dashboard`
+with no parameters. Those two are compatible until Phase 3: streaks are a
+rolling 14-day count, volume rings are Monday-anchored, and the recap covers
+the last completed Mon–Sun week — all need a real calendar day that only the
+device knows.
+
+The client now sends its local date, matching how `PUT /daily-logs/{date}`
+already works. A §14.1 item 3 contract change; §6 should gain the parameter.
+The alternative considered was storing a timezone on `profiles`, rejected
+because it is a schema change that also goes stale the moment the user travels.
+
+## 2026-09-07 — Weekly set targets live in `app/services/config.py`
+
+§7.6 specifies 10 sets for the big groups and 6 for arms, calves and core, and
+notes these become user-configurable later. Gathering them in one module is
+what makes that a small change rather than a search-and-replace. Glutes were
+put at 10 alongside the other large groups; the spec lists them among the
+muscle groups but does not state a target.
+
+## 2026-09-07 — TDEE reads ~90 kcal low in a user's first three weeks
+
+A documented limitation of §7.2's method rather than a defect. The 7-day
+average needs about six days to warm up, so a 21-day window that begins at the
+user's very first weigh-in carries that ramp inside it and fits a flatter slope
+than reality. Measured: exact from 28 days of history onwards, and under
+150 kcal low before that.
+
+Understating maintenance is the safer direction to be wrong in, and the card
+says "collecting data" for the first fortnight anyway. Pinned by a test so it
+cannot drift further.
+
 ## 2026-09-07 — Phase 2: what the offline queue does and does not carry — **needs Wes**
 
 §8.1 says *all* writes go through the queue. Two do not, for reasons that are

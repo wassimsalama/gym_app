@@ -147,7 +147,8 @@ gym-app/
 │       ├── core/         settings, DB session, JWT dependency
 │       ├── models/       SQLAlchemy 2.0 models
 │       ├── routers/      parse · authorize · delegate — no business logic
-│       └── services/     the engine — smoothing, projection, stats
+│       └── services/     the engine — smoothing, projection, tdee,
+│                          prs, streaks, stats
 ├── scripts/              exercise seeding
 └── .github/workflows/    CI
 ```
@@ -159,7 +160,7 @@ gym-app/
 | 0     | Scaffold, schema, auth end-to-end, CI                    | done  |
 | 1     | Weight loop — entry, smoothed trend, goals, onboarding   | done  |
 | 2     | Workout logging, last-set prefill, PRs, offline queue    | done  |
-| 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | next  |
-| 4     | Photos, suggestions engine, recap, TestFlight, App Store |       |
+| 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | done  |
+| 4     | Photos, suggestions engine, recap, TestFlight, App Store | next  |
 
 Decisions made along the way are logged in [DECISIONS.md](DECISIONS.md).

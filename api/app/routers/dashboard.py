@@ -1,42 +1,49 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
-from fastapi import APIRouter
-from sqlalchemy import select
+from fastapi import APIRouter, Query
+from sqlalchemy import func, select
 
 from app.core.auth import CurrentUser, DbSession
-from app.models import DailyLog, Goal
+from app.models import DailyLog, Exercise, Goal, SetLog, WorkoutSession
 from app.schemas.dashboard import (
     Dashboard,
     GoalBlock,
     Streaks,
     TdeeBlock,
+    VolumeRing,
     WeightBlock,
     WeightSeriesPoint,
 )
-from app.services import projection
+from app.services import projection, streaks, tdee
+from app.services.prs import EPLEY_REP_CAP
 from app.services.smoothing import smooth_series
 
 router = APIRouter(tags=["dashboard"])
 
-#: How far back the series reaches. The weight tab lets the user narrow this to
-#: 2 weeks / 1 month / 3 months client-side, so the window only needs to be the
-#: widest span anyone can ask for — its "All" option means all of this.
-#: A year of daily points is roughly 20 KB, well inside §12's one-second budget.
+#: How far back the series reaches. The weight tab narrows this client-side, so
+#: the window only needs to be the widest span anyone can ask for. A year of
+#: daily points is roughly 20 KB, well inside §12's one-second budget.
 MAX_SERIES_DAYS = 365
+
+#: Recent PRs shown on the home tab (spec §6).
+PR_WINDOW_DAYS = 7
 
 
 @router.get("/dashboard", response_model=Dashboard)
-def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
+def get_dashboard(
+    user: CurrentUser,
+    db: DbSession,
+    today: date = Query(
+        alias="date",
+        description="The client's local date. The server never derives it (spec §6).",
+    ),
+) -> Dashboard:
     """Everything the home tab renders, in one request (spec §6).
 
-    Phase 1 fills in `weight` and `goal` for real. `streaks`, `volume`,
-    `prs_recent`, `suggestions`, `tdee` and `recap` are shaped but empty until
-    Phases 2–3 — the contract is stable, only the content grows.
-
-    Note the absence of a "today": every window here is anchored to the user's
-    most recent observation rather than to a server clock, because §6 forbids
-    the server deciding what today is. Phases 2–3 need a real calendar today
-    for streaks and Monday-anchored volume weeks — see DECISIONS.md.
+    `date` is supplied by the client because only the device knows what day it
+    is where the user is standing — §6 forbids the server deriving "today" from
+    UTC, and streaks, Monday-anchored volume weeks and the recap all need a real
+    calendar day. It matches how `PUT /daily-logs/{date}` already works.
     """
     goal = db.scalar(
         select(Goal)
@@ -45,49 +52,35 @@ def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
         .limit(1)
     )
 
-    latest_date = db.scalar(
-        select(DailyLog.log_date)
-        .where(DailyLog.user_id == user.id, DailyLog.weight_kg.is_not(None))
-        .order_by(DailyLog.log_date.desc())
-        .limit(1)
-    )
-
-    points: list = []
-    if latest_date is not None:
-        # Everything on record, bounded at a year. Backfilled history counts:
-        # the user logged it precisely so it would show up.
-        window_start = latest_date - timedelta(days=MAX_SERIES_DAYS - 1)
-        if goal is not None:
-            # Never start after the goal did, or "delta since start" and the
-            # chart would disagree about where the journey began.
-            window_start = min(window_start, goal.start_date)
-            window_start = max(window_start, latest_date - timedelta(days=MAX_SERIES_DAYS - 1))
-
-        observations = db.execute(
-            select(DailyLog.log_date, DailyLog.weight_kg)
-            .where(
-                DailyLog.user_id == user.id,
-                DailyLog.weight_kg.is_not(None),
-                DailyLog.log_date >= window_start,
-                DailyLog.log_date <= latest_date,
-            )
-            .order_by(DailyLog.log_date)
-        ).all()
-        points = smooth_series([(day, float(kg)) for day, kg in observations])
+    # --- weight ------------------------------------------------------------
+    window_start = today - timedelta(days=MAX_SERIES_DAYS - 1)
+    observations = db.execute(
+        select(DailyLog.log_date, DailyLog.weight_kg)
+        .where(
+            DailyLog.user_id == user.id,
+            DailyLog.weight_kg.is_not(None),
+            DailyLog.log_date >= window_start,
+            DailyLog.log_date <= today,
+        )
+        .order_by(DailyLog.log_date)
+    ).all()
+    points = smooth_series([(day, float(kg)) for day, kg in observations])
 
     current_smoothed = points[-1].smoothed_kg if points else None
+    delta = (
+        current_smoothed - float(goal.start_weight_kg)
+        if current_smoothed is not None and goal is not None
+        else None
+    )
 
-    delta = None
-    if current_smoothed is not None and goal is not None:
-        delta = current_smoothed - float(goal.start_weight_kg)
-
+    # --- goal --------------------------------------------------------------
     goal_block = None
     if goal is not None:
         evaluated = projection.evaluate(
             start_kg=float(goal.start_weight_kg),
             goal_kg=float(goal.goal_weight_kg),
             points=points,
-            as_of=latest_date or goal.start_date,
+            as_of=points[-1].date if points else goal.start_date,
             target_date=goal.target_date,
         )
         goal_block = GoalBlock(
@@ -98,8 +91,71 @@ def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
             goal_weight_kg=float(goal.goal_weight_kg),
         )
 
+    # --- streaks -----------------------------------------------------------
+    streak_start = today - timedelta(days=streaks.STREAK_WINDOW_DAYS - 1)
+    logged_dates = set(
+        db.scalars(
+            select(DailyLog.log_date).where(
+                DailyLog.user_id == user.id,
+                DailyLog.log_date >= streak_start,
+                DailyLog.log_date <= today,
+            )
+        )
+    )
+    trained_dates = set(
+        db.scalars(
+            select(DailyLog.log_date).where(
+                DailyLog.user_id == user.id,
+                DailyLog.trained.is_(True),
+                DailyLog.log_date >= streak_start,
+                DailyLog.log_date <= today,
+            )
+        )
+    )
+    # Spec §7.6: a logged session counts as training whether or not the flag
+    # was also set.
+    trained_dates |= set(
+        db.scalars(
+            select(WorkoutSession.session_date).where(
+                WorkoutSession.user_id == user.id,
+                WorkoutSession.session_date >= streak_start,
+                WorkoutSession.session_date <= today,
+            )
+        )
+    )
+    counted = streaks.count_streaks(
+        logged_dates=logged_dates, trained_dates=trained_dates, as_of=today
+    )
+
+    # --- volume rings ------------------------------------------------------
+    monday = streaks.week_start(today)
+    sets_by_group = dict(
+        db.execute(
+            select(Exercise.muscle_group, func.count(SetLog.id))
+            .join(SetLog, SetLog.exercise_id == Exercise.id)
+            .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
+            .where(
+                WorkoutSession.user_id == user.id,
+                WorkoutSession.session_date >= monday,
+                WorkoutSession.session_date <= today,
+            )
+            .group_by(Exercise.muscle_group)
+        ).all()
+    )
+
+    # --- tdee --------------------------------------------------------------
+    calorie_rows = db.execute(
+        select(DailyLog.log_date, DailyLog.calories).where(
+            DailyLog.user_id == user.id,
+            DailyLog.calories.is_not(None),
+            DailyLog.log_date >= today - timedelta(days=tdee.WINDOW_DAYS - 1),
+            DailyLog.log_date <= today,
+        )
+    ).all()
+    estimate = tdee.estimate(points, dict(calorie_rows), as_of=today)
+
     return Dashboard(
-        streaks=Streaks(logged_14=0, trained_14=0),
+        streaks=Streaks(logged_14=counted.logged_14, trained_14=counted.trained_14),
         weight=WeightBlock(
             current_smoothed_kg=current_smoothed,
             delta_since_start_kg=delta,
@@ -109,9 +165,72 @@ def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
             ],
         ),
         goal=goal_block,
-        tdee=TdeeBlock(estimate_kcal=None, days_of_data=0, reliable=False),
-        volume=[],
-        prs_recent=[],
+        tdee=TdeeBlock(
+            estimate_kcal=estimate.estimate_kcal,
+            days_of_data=estimate.days_of_data,
+            reliable=estimate.reliable,
+        ),
+        volume=[
+            VolumeRing(
+                muscle_group=ring.muscle_group,
+                sets_this_week=ring.sets_this_week,
+                weekly_target=ring.weekly_target,
+            )
+            for ring in streaks.volume_rings(sets_by_group=sets_by_group)
+        ],
+        prs_recent=_recent_prs(db, user.id, today),
         suggestions=[],
         recap=None,
     )
+
+
+def _recent_prs(db, user_id, today: date) -> list[dict]:
+    """Best e1RM per exercise in the last week, where it beat everything prior.
+
+    Recomputed rather than stored: §5 forbids persisting derived values, and a
+    cached `is_pr` would go stale the moment an old session was edited.
+    """
+    since = today - timedelta(days=PR_WINDOW_DAYS - 1)
+
+    e1rm = SetLog.weight_kg * (1 + func.least(SetLog.reps, EPLEY_REP_CAP) / 30.0)
+    recent = db.execute(
+        select(
+            Exercise.id,
+            Exercise.name,
+            func.max(e1rm).label("best"),
+            func.max(WorkoutSession.session_date).label("achieved_on"),
+        )
+        .join(SetLog, SetLog.exercise_id == Exercise.id)
+        .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
+        .where(
+            WorkoutSession.user_id == user_id,
+            WorkoutSession.session_date >= since,
+            WorkoutSession.session_date <= today,
+        )
+        .group_by(Exercise.id, Exercise.name)
+    ).all()
+
+    records = []
+    for exercise_id, name, best, achieved_on in recent:
+        prior = db.scalar(
+            select(func.max(e1rm))
+            .join(WorkoutSession, WorkoutSession.id == SetLog.session_id)
+            .where(
+                WorkoutSession.user_id == user_id,
+                SetLog.exercise_id == exercise_id,
+                WorkoutSession.session_date < since,
+            )
+        )
+        if prior is not None and float(best) > float(prior):
+            records.append(
+                {
+                    "exercise_id": exercise_id,
+                    "exercise_name": name,
+                    "e1rm": round(float(best), 2),
+                    "previous_e1rm": round(float(prior), 2),
+                    "achieved_on": achieved_on.isoformat(),
+                }
+            )
+
+    records.sort(key=lambda r: r["e1rm"] - r["previous_e1rm"], reverse=True)
+    return records

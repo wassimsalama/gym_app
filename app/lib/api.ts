@@ -71,7 +71,13 @@ export type Dashboard = {
   } | null;
   tdee: { estimate_kcal: number | null; days_of_data: number; reliable: boolean };
   volume: { muscle_group: string; sets_this_week: number; weekly_target: number }[];
-  prs_recent: unknown[];
+  prs_recent: {
+    exercise_id: number;
+    exercise_name: string;
+    e1rm: number;
+    previous_e1rm: number;
+    achieved_on: IsoDate;
+  }[];
   suggestions: { id: string; kind: string; message: string; evidence: unknown }[];
   recap: unknown | null;
 };
@@ -92,7 +98,12 @@ export const putDailyLog = (date: IsoDate, patch: DailyLogPatch) =>
 export const getDailyLogs = (from: IsoDate, to: IsoDate) =>
   api.get<DailyLog[]>(`/daily-logs?from=${from}&to=${to}`);
 
-export const getDashboard = () => api.get<Dashboard>('/dashboard');
+/**
+ * The home tab's single request (§6). The date comes from this device: only it
+ * knows what day it is where the user is standing, and the server is forbidden
+ * from deriving it from UTC.
+ */
+export const getDashboard = (date: IsoDate) => api.get<Dashboard>(`/dashboard?date=${date}`);
 
 // --- workouts --------------------------------------------------------------
 

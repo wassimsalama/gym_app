@@ -73,7 +73,7 @@ export default function Weight() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [dashboard, goal] = await Promise.all([getDashboard(), getActiveGoal()]);
+      const [dashboard, goal] = await Promise.all([getDashboard(today()), getActiveGoal()]);
       setData(dashboard);
       setGoalRecord(goal);
       setError(null);
@@ -90,7 +90,7 @@ export default function Weight() {
     // body — that would cascade renders on every mount.
     let active = true;
 
-    Promise.all([getDashboard(), getActiveGoal()])
+    Promise.all([getDashboard(today()), getActiveGoal()])
       .then(([dashboard, goal]) => {
         if (!active) return;
         setData(dashboard);
