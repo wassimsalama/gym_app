@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
+import { RecapCard } from '@/components/RecapCard';
 import { StreakBadge } from '@/components/StreakBadge';
+import { SuggestionCard } from '@/components/SuggestionCard';
 import { SyncBadge } from '@/components/SyncBadge';
 import { VolumeRings } from '@/components/VolumeRings';
 import { WeightChart } from '@/components/WeightChart';
@@ -97,6 +99,8 @@ export default function DashboardScreen() {
           </Card>
         ) : (
           <>
+            {data ? <SuggestionCard suggestions={data.suggestions} /> : null}
+
             {data ? (
               <StreakBadge logged14={data.streaks.logged_14} trained14={data.streaks.trained_14} />
             ) : null}
@@ -211,6 +215,8 @@ export default function DashboardScreen() {
             <Card title="This week's volume" footnote="Sets per muscle group since Monday.">
               <VolumeRings rings={data?.volume ?? []} />
             </Card>
+
+            {data?.recap ? <RecapCard recap={data.recap} unit={unit} /> : null}
 
             <Card title="What lands next" footnote="Roadmap §12.">
               <Text className="text-sm text-muted">

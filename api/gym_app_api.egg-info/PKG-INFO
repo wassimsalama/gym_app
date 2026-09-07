@@ -12,6 +12,7 @@ Requires-Dist: pydantic>=2.10
 Requires-Dist: pydantic-settings>=2.6
 Requires-Dist: pyjwt[crypto]>=2.10
 Requires-Dist: certifi>=2024.8.30
+Requires-Dist: boto3>=1.35
 Requires-Dist: python-multipart>=0.0.17
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3; extra == "dev"

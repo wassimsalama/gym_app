@@ -78,8 +78,29 @@ export type Dashboard = {
     previous_e1rm: number;
     achieved_on: IsoDate;
   }[];
-  suggestions: { id: string; kind: string; message: string; evidence: unknown }[];
-  recap: unknown | null;
+  suggestions: {
+    id: string;
+    kind: 'plateau' | 'tdee_update' | 'volume_gap' | 'goal_projection' | 'logging_nudge';
+    message: string;
+    evidence: Record<string, unknown>;
+  }[];
+  recap: {
+    week_start: IsoDate;
+    week_end: IsoDate;
+    sessions: number;
+    total_sets: number;
+    total_volume_kg: number;
+    weight_delta_kg: number | null;
+    days_trained: number;
+    days_logged: number;
+    best_lift: {
+      exercise_id: number;
+      exercise_name: string;
+      e1rm: number;
+      previous_best: number | null;
+      was_a_record: boolean;
+    } | null;
+  } | null;
 };
 
 export const health = () => request<Health>('/health', { anonymous: true });
