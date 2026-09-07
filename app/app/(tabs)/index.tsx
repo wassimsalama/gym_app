@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +14,7 @@ import { VolumeRings } from '@/components/VolumeRings';
 import { WeightChart } from '@/components/WeightChart';
 import { getDashboard, type Dashboard } from '@/lib/api';
 import { describeError, type DisplayError } from '@/lib/errors';
-import { signOut, useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import { formatLong, today } from '@/lib/dates';
 import { driftFromBaselineKg } from '@/lib/goalState';
 import { useUnit } from '@/lib/profile';
@@ -22,6 +23,7 @@ import { formatDelta, formatWeight } from '@/lib/units';
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const router = useRouter();
   const unit = useUnit();
 
   const [data, setData] = useState<Dashboard | null>(null);
@@ -226,7 +228,7 @@ export default function DashboardScreen() {
           </>
         )}
 
-        <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
+        <Button title="Settings" variant="ghost" onPress={() => router.push('/settings')} />
       </ScrollView>
     </View>
   );
