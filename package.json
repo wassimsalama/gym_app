@@ -1,0 +1,16 @@
+{
+  "name": "gym-app",
+  "private": true,
+  "description": "Convenience scripts. The Expo app lives in app/, the API in api/.",
+  "scripts": {
+    "web": "npm --prefix app run web",
+    "ios": "npm --prefix app run ios",
+    "start": "npm --prefix app run start",
+    "api": "api/.venv/bin/uvicorn app.main:app --app-dir api --host 0.0.0.0 --port 8000 --reload",
+    "db": "docker compose up -d",
+    "test": "cd api && ./.venv/bin/pytest",
+    "check": "npm run check:api && npm run check:app",
+    "check:api": "cd api && ./.venv/bin/ruff check . && ./.venv/bin/ruff format --check . && ./.venv/bin/pytest",
+    "check:app": "npm --prefix app run typecheck && npm --prefix app run lint && npm --prefix app run format:check"
+  }
+}
