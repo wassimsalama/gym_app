@@ -24,14 +24,20 @@ app = FastAPI(
     ),
 )
 
-if settings.origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# The app runs in a browser, so every request is subject to CORS — a rule that
+# simply does not exist on native, which is why this went unnoticed until the
+# web build. Without it the browser blocks each call before it is sent, and the
+# client can only report "could not reach the server".
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.origins,
+    allow_origin_regex=settings.dev_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # So the client can honour rate limiting rather than guessing at it.
+    expose_headers=["Retry-After"],
+)
 
 app.include_router(health.router)
 app.include_router(daily_logs.router)

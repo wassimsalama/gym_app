@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # app — the device only ever sees short-lived signed URLs minted here.
     supabase_service_key: str | None = None
 
+    #: Comma-separated browser origins allowed to call this API. Required in
+    #: production; left empty, the app falls back to development origins only
+    #: (see `dev_origin_regex`).
     allowed_origins: str = ""
 
     # Supabase signs access tokens with aud="authenticated".
@@ -45,6 +48,24 @@ class Settings(BaseSettings):
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def dev_origin_regex(self) -> str | None:
+        """Localhost and private-LAN origins, for development only.
+
+        Returned only when `allowed_origins` is unset, so configuring a
+        production origin list switches this off entirely. It is safe even if
+        left on: a browser sends the *page's* own origin, and an attacker's
+        page is served from a public domain, never from localhost or 192.168.x.
+        """
+        if self.origins:
+            return None
+        return (
+            r"^http://(localhost|127\.0\.0\.1|"
+            r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+            r"192\.168\.\d{1,3}\.\d{1,3}|"
+            r"172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+        )
 
     @property
     def jwks_url(self) -> str:
