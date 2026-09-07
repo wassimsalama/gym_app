@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.core.limits import limit_by_address
 from app.routers import (
     account,
     daily_logs,
@@ -16,6 +17,9 @@ from app.routers import (
 settings = get_settings()
 
 app = FastAPI(
+    # Applied to every route, signed in or not — the only defence that works
+    # before a caller has identified itself.
+    dependencies=[Depends(limit_by_address)],
     title="Gym App API",
     version="0.1.0",
     description=(

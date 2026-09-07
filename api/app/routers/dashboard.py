@@ -3,7 +3,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser
 from app.models import DailyLog, Exercise, Goal, SetLog, WorkoutSession
 from app.routers import _dashboard_data as data
 from app.schemas.dashboard import (
@@ -35,7 +36,7 @@ PR_WINDOW_DAYS = 7
 
 @router.get("/dashboard", response_model=Dashboard)
 def get_dashboard(
-    user: CurrentUser,
+    user: ReadUser,
     db: DbSession,
     today: date = Query(
         alias="date",

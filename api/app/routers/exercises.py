@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import Select, func, or_, select
 
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser, WriteUser
 from app.models import Exercise, SetLog, WorkoutSession
 from app.schemas.workout import ExerciseCreate, ExerciseOut, LastSets, SetOut
 
@@ -20,7 +21,7 @@ def _visible_to(user_id) -> Select[tuple[Exercise]]:
 
 @router.get("", response_model=list[ExerciseOut])
 def search_exercises(
-    user: CurrentUser,
+    user: ReadUser,
     db: DbSession,
     q: str | None = Query(default=None, max_length=100),
 ) -> list[Exercise]:
@@ -56,7 +57,7 @@ def search_exercises(
 
 
 @router.post("", response_model=ExerciseOut, status_code=status.HTTP_201_CREATED)
-def create_exercise(body: ExerciseCreate, user: CurrentUser, db: DbSession) -> Exercise:
+def create_exercise(body: ExerciseCreate, user: WriteUser, db: DbSession) -> Exercise:
     """Create a custom exercise when the search misses (spec §2.3)."""
     name = body.name.strip()
 
@@ -80,7 +81,7 @@ def create_exercise(body: ExerciseCreate, user: CurrentUser, db: DbSession) -> E
 
 
 @router.get("/{exercise_id}/last-sets", response_model=LastSets)
-def last_sets(exercise_id: int, user: CurrentUser, db: DbSession) -> LastSets:
+def last_sets(exercise_id: int, user: ReadUser, db: DbSession) -> LastSets:
     """Sets from the user's most recent session containing this exercise.
 
     This is the prefill behind §2.3's "logging an unchanged session is ~3 taps".

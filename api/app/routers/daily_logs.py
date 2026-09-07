@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser, WriteUser
 from app.models import DailyLog
 from app.schemas.daily_log import DailyLogOut, DailyLogUpsert
 
@@ -16,7 +17,7 @@ MAX_RANGE_DAYS = 400
 
 @router.put("/{log_date}", response_model=DailyLogOut)
 def upsert_daily_log(
-    log_date: date, body: DailyLogUpsert, user: CurrentUser, db: DbSession
+    log_date: date, body: DailyLogUpsert, user: WriteUser, db: DbSession
 ) -> DailyLog:
     """Merge the provided fields into the user's row for that date (spec §6).
 
@@ -48,7 +49,7 @@ def upsert_daily_log(
 
 @router.get("", response_model=list[DailyLogOut])
 def list_daily_logs(
-    user: CurrentUser,
+    user: ReadUser,
     db: DbSession,
     from_: date = Query(alias="from"),
     to: date = Query(),

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select, update
 
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser, WriteUser
 from app.models import DailyLog, Goal
 from app.schemas.goal import GoalCreate, GoalOut, GoalUpdate
 
@@ -9,7 +10,7 @@ router = APIRouter(prefix="/goals", tags=["goals"])
 
 
 @router.post("", response_model=GoalOut, status_code=status.HTTP_201_CREATED)
-def create_goal(body: GoalCreate, user: CurrentUser, db: DbSession) -> Goal:
+def create_goal(body: GoalCreate, user: WriteUser, db: DbSession) -> Goal:
     """Open a goal, closing any previous active one (spec §6).
 
     Start weight is read from the user's most recent weight observation rather
@@ -55,7 +56,7 @@ def create_goal(body: GoalCreate, user: CurrentUser, db: DbSession) -> Goal:
 
 
 @router.get("/active", response_model=GoalOut)
-def get_active_goal(user: CurrentUser, db: DbSession) -> Goal:
+def get_active_goal(user: ReadUser, db: DbSession) -> Goal:
     goal = db.scalar(
         select(Goal)
         .where(Goal.user_id == user.id, Goal.status == "active")
@@ -68,7 +69,7 @@ def get_active_goal(user: CurrentUser, db: DbSession) -> Goal:
 
 
 @router.patch("/active", response_model=GoalOut)
-def update_active_goal(body: GoalUpdate, user: CurrentUser, db: DbSession) -> Goal:
+def update_active_goal(body: GoalUpdate, user: WriteUser, db: DbSession) -> Goal:
     """Change the target of the goal already in flight.
 
     Only the destination moves. `start_weight_kg` and `start_date` are
