@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import CurrentUser, DbSession
@@ -142,8 +142,15 @@ def _best_e1rm_before(db, user_id, exercise_ids: set[int]) -> dict[int, float]:
     if not exercise_ids:
         return {}
 
-    capped_reps = func.least(SetLog.reps, prs.EPLEY_REP_CAP)
-    e1rm = SetLog.weight_kg * (1 + capped_reps / 30.0)
+    # Cast to double precision before doing any arithmetic. weight_kg is
+    # numeric(6,2), and leaving the expression in numeric makes SQLAlchemy
+    # quantise the aggregate back to two decimals — 119.58 instead of
+    # 119.5833... The stored best would then read fractionally *below* the same
+    # lift recomputed in Python, and repeating a best set would announce a PR
+    # it did not earn.
+    weight = cast(SetLog.weight_kg, Float)
+    capped_reps = cast(func.least(SetLog.reps, prs.EPLEY_REP_CAP), Float)
+    e1rm = weight * (1 + capped_reps / 30.0)
 
     rows = db.execute(
         select(SetLog.exercise_id, func.max(e1rm))
