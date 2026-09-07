@@ -16,6 +16,41 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — The web becomes the target; App Store dropped — **Wes's call**
+
+Wes decided not to pay for the Apple Developer Program and will host the app as
+a website instead. This reverses several things the spec fixed, recorded here
+so nothing rots silently:
+
+- §1's non-goal "no analytics SDKs" — analytics are now wanted (first-party
+  only; see below).
+- §3's "iOS first, Android later, web never" — the web is now the only target.
+- §13's App Store checklist is moot. The account-deletion work stays: it is
+  good practice and the GDPR expectation for a hosted app regardless.
+
+Three things had to change for the web to work at all:
+
+1. **Session storage.** `expo-secure-store` has no browser implementation, so
+   the session throws on load. Split into `lib/sessionStorage.ts`: keychain on
+   native, guarded `localStorage` on web. Guarded because private browsing makes
+   every call throw, and a session that cannot persist should mean signing in
+   again rather than a blank page.
+2. **The offline queue.** `expo-sqlite@57.0.2` has a broken web build — its
+   worker imports `wa-sqlite.wasm`, which the package does not ship. The queue
+   now sits behind `lib/queueStore.ts` with an IndexedDB sibling for web.
+   IndexedDB rather than localStorage specifically because a queue is written
+   from every open tab, and localStorage's read-modify-write would let two tabs
+   clobber each other's pending writes. The read cache does use localStorage —
+   losing a cached read costs a spinner, losing a queued write costs a workout.
+3. **Layout.** Every screen was laid out at phone width. Stretched across a
+   monitor, the inputs became metre-wide. `components/AppFrame.tsx` holds the
+   app to a 560 px centred column on web and is a no-op on native — cheaper and
+   more honest than maintaining two layouts.
+
+Verified in a real browser rather than by building alone: the page loads with no
+console errors, styles apply, the frame centres with 360 px gutters at 1280 px
+with no horizontal scroll, and IndexedDB behaves as the queue expects.
+
 ## 2026-09-07 — Photos use Supabase Storage, not S3 — **approved by Wes**
 
 §3 and §9 specify S3 with presigned URLs. Supabase Storage was chosen instead:

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AppFrame } from '@/components/AppFrame';
 import '@/global.css';
 import { supabase, useAuth } from '@/lib/auth';
 import { flushAfterAuthRefresh, startSync } from '@/lib/sync';
@@ -46,17 +47,19 @@ export default function RootLayout() {
         tabs reachable, and signing out navigates off them rather than leaving
         an authenticated screen mounted with a dead session.
       */}
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!!session}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-        </Stack.Protected>
+      <AppFrame>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={!!session}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          </Stack.Protected>
 
-        <Stack.Protected guard={!session}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-      </Stack>
+          <Stack.Protected guard={!session}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+        </Stack>
+      </AppFrame>
     </SafeAreaProvider>
   );
 }
