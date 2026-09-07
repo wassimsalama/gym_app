@@ -5,10 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ProgressBar } from '@/components/ProgressBar';
+import { StreakBadge } from '@/components/StreakBadge';
+import { SyncBadge } from '@/components/SyncBadge';
+import { VolumeRings } from '@/components/VolumeRings';
 import { WeightChart } from '@/components/WeightChart';
 import { ApiError, getDashboard, type Dashboard } from '@/lib/api';
 import { signOut, useAuth } from '@/lib/auth';
-import { formatLong } from '@/lib/dates';
+import { formatLong, today } from '@/lib/dates';
 import { driftFromBaselineKg } from '@/lib/goalState';
 import { useUnit } from '@/lib/profile';
 import { formatDelta, formatWeight } from '@/lib/units';
@@ -26,7 +29,7 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      setData(await getDashboard());
+      setData(await getDashboard(today()));
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Could not load your dashboard');
@@ -38,7 +41,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     let active = true;
-    getDashboard()
+    getDashboard(today())
       .then((next) => {
         if (active) setData(next);
       })
@@ -62,7 +65,10 @@ export default function DashboardScreen() {
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
       <View className="px-5 pb-3 pt-2">
-        <Text className="text-2xl font-bold text-white">Dashboard</Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-2xl font-bold text-white">Dashboard</Text>
+          <SyncBadge />
+        </View>
         <Text className="mt-1 text-sm text-muted">{session?.user.email ?? ''}</Text>
       </View>
 
@@ -86,6 +92,24 @@ export default function DashboardScreen() {
           </Card>
         ) : (
           <>
+            {data ? (
+              <StreakBadge logged14={data.streaks.logged_14} trained14={data.streaks.trained_14} />
+            ) : null}
+
+            {data && data.prs_recent.length > 0 ? (
+              <Card title="Recent personal records">
+                {data.prs_recent.map((pr) => (
+                  <View key={pr.exercise_id} className="mb-2">
+                    <Text className="text-base font-bold text-accent">{pr.exercise_name}</Text>
+                    <Text className="mt-0.5 text-sm text-muted">
+                      {formatWeight(pr.e1rm, unit)} estimated 1RM, up from{' '}
+                      {formatWeight(pr.previous_e1rm, unit)} · {formatLong(pr.achieved_on)}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+
             <Card title="Weight trend">
               <View className="mb-3 flex-row items-baseline gap-3">
                 <Text className="text-3xl font-bold text-white">
@@ -157,18 +181,36 @@ export default function DashboardScreen() {
               </Card>
             ) : null}
 
+            <Card
+              title="Maintenance"
+              footnote="Measured from your own weight trend and intake, not a formula."
+            >
+              {data?.tdee.reliable && data.tdee.estimate_kcal ? (
+                <>
+                  <Text className="text-3xl font-bold text-white">
+                    {data.tdee.estimate_kcal}
+                    <Text className="text-base font-normal text-muted"> kcal/day</Text>
+                  </Text>
+                  <Text className="mt-1 text-sm text-muted">
+                    Based on {data.tdee.days_of_data} days of paired weight and calories.
+                  </Text>
+                </>
+              ) : (
+                <Text className="text-sm text-muted">
+                  Collecting data — {Math.max(0, 14 - (data?.tdee.days_of_data ?? 0))} more days
+                  with both a weight and calories logged.
+                </Text>
+              )}
+            </Card>
+
+            <Card title="This week's volume" footnote="Sets per muscle group since Monday.">
+              <VolumeRings rings={data?.volume ?? []} />
+            </Card>
+
             <Card title="What lands next" footnote="Roadmap §12.">
-              <View className="gap-2">
-                <Text className="text-sm text-muted">
-                  Phase 2 — workout logging with last-set prefill, PRs, offline queue.
-                </Text>
-                <Text className="text-sm text-muted">
-                  Phase 3 — nutrition, streaks, volume rings, TDEE.
-                </Text>
-                <Text className="text-sm text-muted">
-                  Phase 4 — photos, the suggestions engine, TestFlight.
-                </Text>
-              </View>
+              <Text className="text-sm text-muted">
+                Phase 4 — photos, the suggestions engine, weekly recap, TestFlight.
+              </Text>
             </Card>
           </>
         )}
