@@ -121,3 +121,25 @@ def test_dashboard_is_scoped_to_its_owner(client: TestClient, auth_headers: dict
     body = client.get("/dashboard", headers=other).json()
     assert body["weight"]["series"] == []
     assert body["goal"] is None
+
+
+def test_series_reaches_back_past_the_goal_start(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """Backfilled history predating the goal must still appear — the user
+    logged it precisely so the "All" range would show it."""
+    seed(client, auth_headers, [("2026-09-30", 86.0)])
+    client.post("/goals", json={"goal_weight_kg": 82}, headers=auth_headers)
+    seed(client, auth_headers, [("2026-05-01", 92.0), ("2026-07-01", 89.0)])
+
+    series = client.get("/dashboard", headers=auth_headers).json()["weight"]["series"]
+    assert series[0]["date"] == "2026-05-01"
+    assert len(series) == 3
+
+
+def test_series_is_bounded_at_a_year(client: TestClient, auth_headers: dict[str, str]) -> None:
+    """A very old entry must not unbound the response size."""
+    seed(client, auth_headers, [("2020-01-01", 110.0), ("2026-09-30", 86.0)])
+
+    series = client.get("/dashboard", headers=auth_headers).json()["weight"]["series"]
+    assert [p["date"] for p in series] == ["2026-09-30"]

@@ -18,12 +18,10 @@ from app.services.smoothing import smooth_series
 
 router = APIRouter(tags=["dashboard"])
 
-#: How much history the trend chart carries. Long enough to show a cut working,
-#: short enough to stay one small response.
-SERIES_DAYS = 90
-
-#: A goal older than this stops extending the window; the chart is for the
-#: current push, not a year of history.
+#: How far back the series reaches. The weight tab lets the user narrow this to
+#: 2 weeks / 1 month / 3 months client-side, so the window only needs to be the
+#: widest span anyone can ask for — its "All" option means all of this.
+#: A year of daily points is roughly 20 KB, well inside §12's one-second budget.
 MAX_SERIES_DAYS = 365
 
 
@@ -56,12 +54,14 @@ def get_dashboard(user: CurrentUser, db: DbSession) -> Dashboard:
 
     points: list = []
     if latest_date is not None:
-        window_start = latest_date - timedelta(days=SERIES_DAYS - 1)
+        # Everything on record, bounded at a year. Backfilled history counts:
+        # the user logged it precisely so it would show up.
+        window_start = latest_date - timedelta(days=MAX_SERIES_DAYS - 1)
         if goal is not None:
-            # Extend back to the goal's start so "delta since start" and the
-            # chart agree about where the journey began.
+            # Never start after the goal did, or "delta since start" and the
+            # chart would disagree about where the journey began.
             window_start = min(window_start, goal.start_date)
-        window_start = max(window_start, latest_date - timedelta(days=MAX_SERIES_DAYS - 1))
+            window_start = max(window_start, latest_date - timedelta(days=MAX_SERIES_DAYS - 1))
 
         observations = db.execute(
             select(DailyLog.log_date, DailyLog.weight_kg)
