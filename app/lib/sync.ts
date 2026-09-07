@@ -1,7 +1,8 @@
 /**
  * Offline-first write queue (spec §8).
  *
- * Every write goes through here: it is durably enqueued in SQLite, the caller
+ * Every write goes through here: it is enqueued durably (SQLite on native,
+ * IndexedDB in the browser — see lib/queueStore), the caller
  * gets an optimistic result immediately, and a flush is attempted in the
  * background. Nothing the user logs can be lost to a dead connection, and
  * nothing blocks on one.
@@ -15,10 +16,10 @@
  */
 
 import NetInfo from '@react-native-community/netinfo';
-import * as SQLite from 'expo-sqlite';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { ApiError, request } from '@/lib/http';
+import * as store from '@/lib/queueStore';
 
 export type PendingOp = {
   id: number;
@@ -37,53 +38,22 @@ export type SyncState = {
   flushing: boolean;
 };
 
-const DB_NAME = 'gym-sync.db';
 const ATTEMPTS_BEFORE_VISIBLE = 3;
 const BASE_BACKOFF_MS = 2_000;
 const MAX_BACKOFF_MS = 5 * 60_000;
 
-let db: SQLite.SQLiteDatabase | null = null;
 let flushing = false;
 let listenersBound = false;
 
 const subscribers = new Set<(state: SyncState) => void>();
-
-async function database(): Promise<SQLite.SQLiteDatabase> {
-  if (db) return db;
-
-  db = await SQLite.openDatabaseAsync(DB_NAME);
-  await db.execAsync(`
-    pragma journal_mode = WAL;
-    create table if not exists pending_ops (
-      id integer primary key autoincrement,
-      method text not null,
-      path text not null,
-      body_json text,
-      created_at text not null,
-      attempts integer not null default 0,
-      next_attempt_at text
-    );
-  `);
-  return db;
-}
 
 function backoffMs(attempts: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** attempts, MAX_BACKOFF_MS);
 }
 
 async function currentState(): Promise<SyncState> {
-  const handle = await database();
-  const row = await handle.getFirstAsync<{ pending: number; struggling: number }>(
-    `select count(*) as pending,
-            coalesce(sum(case when attempts > ? then 1 else 0 end), 0) as struggling
-     from pending_ops`,
-    [ATTEMPTS_BEFORE_VISIBLE],
-  );
-  return {
-    pending: row?.pending ?? 0,
-    struggling: row?.struggling ?? 0,
-    flushing,
-  };
+  const { pending, struggling } = await store.counts(ATTEMPTS_BEFORE_VISIBLE);
+  return { pending, struggling, flushing };
 }
 
 async function notify(): Promise<void> {
@@ -110,28 +80,20 @@ export async function enqueue<T>(
   path: string,
   body?: unknown,
 ): Promise<T | null> {
-  const handle = await database();
-  const result = await handle.runAsync(
-    `insert into pending_ops (method, path, body_json, created_at, attempts)
-     values (?, ?, ?, ?, 0)`,
-    [method, path, body === undefined ? null : JSON.stringify(body), new Date().toISOString()],
-  );
+  const id = await store.insert({
+    method,
+    path,
+    body_json: body === undefined ? null : JSON.stringify(body),
+    created_at: new Date().toISOString(),
+  });
 
   void notify();
-  return flushOne<T>(result.lastInsertRowId);
+  return flushOne<T>(id);
 }
 
 /** Send a single queued op, deleting it on success or terminal failure. */
 async function flushOne<T>(id: number): Promise<T | null> {
-  const handle = await database();
-  const op = await handle.getFirstAsync<{
-    id: number;
-    method: PendingOp['method'];
-    path: string;
-    body_json: string | null;
-    attempts: number;
-  }>('select id, method, path, body_json, attempts from pending_ops where id = ?', [id]);
-
+  const op = await store.get(id);
   if (!op) return null;
 
   try {
@@ -139,7 +101,7 @@ async function flushOne<T>(id: number): Promise<T | null> {
       method: op.method,
       body: op.body_json === null ? undefined : JSON.parse(op.body_json),
     });
-    await handle.runAsync('delete from pending_ops where id = ?', [op.id]);
+    await store.remove(op.id);
     void notify();
     return response;
   } catch (error) {
@@ -158,19 +120,14 @@ async function flushOne<T>(id: number): Promise<T | null> {
  * resolve on their own are kept.
  */
 async function recordFailure(id: number, attempts: number, error: unknown): Promise<void> {
-  const handle = await database();
   const retryable = !(error instanceof ApiError) || error.isRetryable;
 
   if (!retryable) {
-    await handle.runAsync('delete from pending_ops where id = ?', [id]);
+    await store.remove(id);
     return;
   }
 
-  const next = new Date(Date.now() + backoffMs(attempts)).toISOString();
-  await handle.runAsync(
-    'update pending_ops set attempts = attempts + 1, next_attempt_at = ? where id = ?',
-    [next, id],
-  );
+  await store.bumpAttempt(id, new Date(Date.now() + backoffMs(attempts)).toISOString());
 }
 
 /**
@@ -186,25 +143,12 @@ export async function flush(): Promise<void> {
   void notify();
 
   try {
-    const handle = await database();
-    const now = new Date().toISOString();
-    const due = await handle.getAllAsync<{ id: number }>(
-      `select id from pending_ops
-       where next_attempt_at is null or next_attempt_at <= ?
-       order by id asc`,
-      [now],
-    );
+    const due = await store.due(new Date().toISOString());
 
-    for (const { id } of due) {
-      const before = await handle.getFirstAsync<{ attempts: number }>(
-        'select attempts from pending_ops where id = ?',
-        [id],
-      );
+    for (const id of due) {
+      const before = await store.get(id);
       await flushOne(id);
-      const after = await handle.getFirstAsync<{ attempts: number }>(
-        'select attempts from pending_ops where id = ?',
-        [id],
-      );
+      const after = await store.get(id);
       // Still present with a bumped attempt count means it failed; stop so
       // later ops cannot overtake it.
       if (after && before && after.attempts > before.attempts) break;
@@ -239,14 +183,12 @@ export function startSync(): () => void {
 
 /** Called after a successful token refresh — queued 401s may now succeed. */
 export async function flushAfterAuthRefresh(): Promise<void> {
-  const handle = await database();
-  await handle.runAsync('update pending_ops set next_attempt_at = null');
+  await store.clearBackoff();
   await flush();
 }
 
 /** Test/debug helper: drop everything queued. */
 export async function clearQueue(): Promise<void> {
-  const handle = await database();
-  await handle.runAsync('delete from pending_ops');
+  await store.clear();
   void notify();
 }

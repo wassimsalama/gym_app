@@ -1,7 +1,8 @@
-import { createClient, type Session, type SupportedStorage } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+import { createClient, type Session } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
+
+import { sessionStorage } from '@/lib/sessionStorage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -13,58 +14,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-/**
- * SecureStore refuses values much over 2 KB, and a Supabase session (access
- * token + refresh token + user object) regularly exceeds that. Split the value
- * across numbered chunks and keep a count under the base key.
- */
-const CHUNK_SIZE = 1536;
-
-const chunkedSecureStore: SupportedStorage = {
-  async getItem(key) {
-    const count = await SecureStore.getItemAsync(`${key}.count`);
-    if (count === null) return null;
-    const parts = await Promise.all(
-      Array.from({ length: Number(count) }, (_, i) => SecureStore.getItemAsync(`${key}.${i}`)),
-    );
-    return parts.some((p) => p === null) ? null : parts.join('');
-  },
-
-  async setItem(key, value) {
-    await chunkedSecureStore.removeItem(key);
-    const chunks = value.match(new RegExp(`.{1,${CHUNK_SIZE}}`, 'gs')) ?? [''];
-    await Promise.all(chunks.map((chunk, i) => SecureStore.setItemAsync(`${key}.${i}`, chunk)));
-    await SecureStore.setItemAsync(`${key}.count`, String(chunks.length));
-  },
-
-  async removeItem(key) {
-    const count = await SecureStore.getItemAsync(`${key}.count`);
-    if (count === null) return;
-    await Promise.all(
-      Array.from({ length: Number(count) }, (_, i) => SecureStore.deleteItemAsync(`${key}.${i}`)),
-    );
-    await SecureStore.deleteItemAsync(`${key}.count`);
-  },
-};
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: chunkedSecureStore,
+    storage: sessionStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // There is no URL to read a session back from in a native app.
-    detectSessionInUrl: false,
+    // On the web the confirmation and recovery links come back through the
+    // URL and must be consumed; in a native app there is no URL to read.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 
 // Refresh tokens only while the app is actually in front of the user.
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    void supabase.auth.startAutoRefresh();
-  } else {
-    void supabase.auth.stopAutoRefresh();
-  }
-});
+// AppState reports "active" permanently on web, so the listener would be a
+// no-op there; supabase-js handles browser visibility itself.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      void supabase.auth.startAutoRefresh();
+    } else {
+      void supabase.auth.stopAutoRefresh();
+    }
+  });
+}
 
 export type AuthState = {
   session: Session | null;
