@@ -147,7 +147,7 @@ gym-app/
 │       ├── core/         settings, DB session, JWT dependency
 │       ├── models/       SQLAlchemy 2.0 models
 │       ├── routers/      parse · authorize · delegate — no business logic
-│       └── services/     the engine (Phase 3–4)
+│       └── services/     the engine — smoothing, projection, stats
 ├── scripts/              exercise seeding
 └── .github/workflows/    CI
 ```
@@ -157,8 +157,8 @@ gym-app/
 | Phase | Scope                                                    | State |
 | ----- | -------------------------------------------------------- | ----- |
 | 0     | Scaffold, schema, auth end-to-end, CI                    | done  |
-| 1     | Weight loop — entry, smoothed trend, goals, onboarding   | next  |
-| 2     | Workout logging, last-set prefill, PRs, offline queue    |       |
+| 1     | Weight loop — entry, smoothed trend, goals, onboarding   | done  |
+| 2     | Workout logging, last-set prefill, PRs, offline queue    | next  |
 | 3     | Nutrition, streaks, volume rings, TDEE, dashboard        |       |
 | 4     | Photos, suggestions engine, recap, TestFlight, App Store |       |
 

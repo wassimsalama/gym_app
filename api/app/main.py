@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import health
+from app.routers import daily_logs, dashboard, goals, health
 
 settings = get_settings()
 
@@ -25,3 +25,6 @@ if settings.origins:
     )
 
 app.include_router(health.router)
+app.include_router(daily_logs.router)
+app.include_router(goals.router)
+app.include_router(dashboard.router)

@@ -9,6 +9,7 @@
  */
 
 import { supabase } from '@/lib/auth';
+import type { IsoDate } from '@/lib/dates';
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -151,5 +152,77 @@ export type AuthHealth = {
   unit: 'kg' | 'lb';
 };
 
+export type Split = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full' | 'other';
+
+/** Weights are kg everywhere on the wire (spec §5); convert only in lib/units.ts. */
+export type DailyLog = {
+  log_date: IsoDate;
+  weight_kg: number | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  trained: boolean | null;
+  split: string | null;
+};
+
+/** Only the keys present are written; omitted keys are left untouched (§6). */
+export type DailyLogPatch = Partial<Omit<DailyLog, 'log_date'>>;
+
+export type Goal = {
+  id: number;
+  start_weight_kg: number;
+  goal_weight_kg: number;
+  start_date: IsoDate;
+  target_date: IsoDate | null;
+  status: 'active' | 'achieved' | 'abandoned';
+};
+
+export type WeightSeriesPoint = {
+  date: IsoDate;
+  raw_kg: number;
+  smoothed_kg: number;
+};
+
+export type Dashboard = {
+  streaks: { logged_14: number; trained_14: number };
+  weight: {
+    current_smoothed_kg: number | null;
+    delta_since_start_kg: number | null;
+    series: WeightSeriesPoint[];
+  };
+  goal: {
+    progress_pct: number;
+    projected_date: IsoDate | null;
+    on_track: boolean | null;
+  } | null;
+  tdee: { estimate_kcal: number | null; days_of_data: number; reliable: boolean };
+  volume: { muscle_group: string; sets_this_week: number; weekly_target: number }[];
+  prs_recent: unknown[];
+  suggestions: { id: string; kind: string; message: string; evidence: unknown }[];
+  recap: unknown | null;
+};
+
 export const health = () => request<Health>('/health', { anonymous: true });
 export const healthAuth = () => api.get<AuthHealth>('/health-auth');
+
+export const putDailyLog = (date: IsoDate, patch: DailyLogPatch) =>
+  api.put<DailyLog>(`/daily-logs/${date}`, patch);
+
+export const getDailyLogs = (from: IsoDate, to: IsoDate) =>
+  api.get<DailyLog[]>(`/daily-logs?from=${from}&to=${to}`);
+
+export const getDashboard = () => api.get<Dashboard>('/dashboard');
+
+export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null) =>
+  api.post<Goal>('/goals', { goal_weight_kg, ...(target_date ? { target_date } : {}) });
+
+/** Resolves to null rather than throwing when no goal has been set yet. */
+export async function getActiveGoal(): Promise<Goal | null> {
+  try {
+    return await api.get<Goal>('/goals/active');
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
