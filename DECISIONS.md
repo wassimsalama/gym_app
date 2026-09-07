@@ -16,6 +16,59 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Phase 1: onboarding ships without the optional starting photo — **needs Wes**
+
+§12 Phase 1 lists "Onboarding flow (current weight, goal weight, optional photo)",
+but the entire photo pipeline — private bucket, presigned PUT/GET, client-side
+compression — is Phase 4 (§9). Building a one-off photo path for onboarding
+would mean either shipping a second storage mechanism or pulling Phase 4 work
+forward.
+
+Onboarding therefore collects the two weights only. This is a deliberate scope
+deferral under §14.1 item 9, not an oversight: say the word and it moves either
+way. The natural fix is to add the photo step when Phase 4 lands, at which point
+it is a few lines rather than a parallel implementation.
+
+## 2026-09-07 — Goal projection formula — **needs Wes**
+
+§6 and §2.4 fix the *shape* (`progress_pct`, `projected_date`, `on_track`) but
+no formula, and §14.1 item 8 makes engine formulas Wes's call — so these are
+proposals, not settled:
+
+- Trend fitted by ordinary least squares over the smoothed series, 21-day
+  window (matches §7.2's TDEE window, so the two dashboard numbers can never
+  disagree about which way weight is moving).
+- Regressing *smoothed* rather than raw values, because one bad morning
+  otherwise swings the projected date by weeks.
+- `progress_pct` clamped to 0–100: overshooting is still 100%, and moving the
+  wrong way is 0%, not a negative a progress bar cannot draw.
+- No projection at all when the trend is flat (< 0.005 kg/day), points away
+  from the goal, or lands beyond 730 days. §2.6 says status comes from the
+  trend, not wishful maths, so the honest answer is to refuse.
+- `on_track` is null unless both a target date and a projection exist.
+
+## 2026-09-07 — `POST /goals` derives start weight and start date from the log
+
+§6's request body is `{goal_weight_kg, target_date?}` — no start weight — and
+§2.6 says start weight is automatic from the log. The server therefore reads
+the user's most recent weight observation. It also takes `start_date` from that
+same observation rather than from a clock, which keeps the server out of
+deciding what "today" is (§6). A goal cannot be created before a weight exists;
+that returns 422 with a message saying so.
+
+## 2026-09-07 — `GET /dashboard` has no notion of "today" — **needs Wes before Phase 3**
+
+§6 forbids the server deriving "today" from UTC, and `GET /dashboard` takes no
+parameters. Those two rules are compatible in Phase 1, because weight and goal
+windows anchor to the user's most recent observation.
+
+They collide in Phase 3. Streaks are "rolling 14-day" (§7.6), volume rings are
+Monday-anchored, and the recap covers "the most recent completed Mon–Sun week"
+(§7.7) — all need a real calendar today, which only the client knows. The
+options are a `?date=` query parameter (a §14.1 item 3 contract change) or
+storing a timezone on `profiles` (a §14.1 item 1 schema change). Flagged now
+rather than discovered mid-Phase-3.
+
 ## 2026-09-07 — JWT verification moved from HS256 to JWKS/ES256 — **approved by Wes**
 
 Spec §10 specifies HS256 against `SUPABASE_JWT_SECRET`. The project Wes created
