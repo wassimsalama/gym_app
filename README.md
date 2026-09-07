@@ -141,7 +141,7 @@ gym-app/
 ├── app/                  Expo application
 │   ├── app/              expo-router routes — (auth) and (tabs)
 │   ├── components/       reusable UI
-│   └── lib/              api · auth · units · dates  (sync in Phase 2)
+│   └── lib/              http · api · sync · cache · auth · units · dates
 ├── api/
 │   └── app/
 │       ├── core/         settings, DB session, JWT dependency
@@ -158,8 +158,8 @@ gym-app/
 | ----- | -------------------------------------------------------- | ----- |
 | 0     | Scaffold, schema, auth end-to-end, CI                    | done  |
 | 1     | Weight loop — entry, smoothed trend, goals, onboarding   | done  |
-| 2     | Workout logging, last-set prefill, PRs, offline queue    | next  |
-| 3     | Nutrition, streaks, volume rings, TDEE, dashboard        |       |
+| 2     | Workout logging, last-set prefill, PRs, offline queue    | done  |
+| 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | next  |
 | 4     | Photos, suggestions engine, recap, TestFlight, App Store |       |
 
 Decisions made along the way are logged in [DECISIONS.md](DECISIONS.md).

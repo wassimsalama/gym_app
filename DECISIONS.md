@@ -16,6 +16,30 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Phase 2: what the offline queue does and does not carry — **needs Wes**
+
+§8.1 says *all* writes go through the queue. Two do not, for reasons that are
+about correctness rather than convenience:
+
+- **Creating a custom exercise** returns the generated id that the session's
+  sets hang from. Queueing it would mean inventing temporary ids and rewriting
+  them on flush — real complexity for a rare action. Logging against exercises
+  that already exist works fully offline.
+- **Goals** are configuration, set once during onboarding, and the caller needs
+  the created row back to proceed. Onboarding cannot complete offline anyway.
+
+Daily logs and workout sessions — the writes that actually happen in a basement
+gym with no signal — are queued.
+
+The queue also **drops** operations the server rejected outright (4xx other
+than timeouts). A 422 will still be a 422 tomorrow; retrying it forever would
+block everything behind it and leave a permanent "unsynced" badge the user has
+no way to clear.
+
+§8 also says the queue is mandatory *before any logging UI is built*, while §12
+schedules it in Phase 2 — so Phase 1's weight logging shipped without it. It is
+retrofitted through the queue now.
+
 ## 2026-09-07 — A stale baseline now offers its own fix; `goal` block gained two fields — **needs Wes**
 
 Reported as "the progress bar says 0". The arithmetic was right and the outcome
