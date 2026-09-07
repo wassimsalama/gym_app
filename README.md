@@ -3,8 +3,10 @@
 Nutrition, training, weight, recovery and progress photos in one place — and
 evidence-based suggestions derived from the combination.
 
-> **Status: Phase 0 complete.** Backend, schema, auth and the app shell are in
-> place. Weight logging lands in Phase 1. See the [roadmap](#roadmap).
+> **Status: feature-complete.** All five tabs, the engine and the offline queue
+> are built and tested. What remains is infrastructure — an S3 bucket for
+> photos and an Apple Developer account for TestFlight. See the
+> [roadmap](#roadmap).
 
 ## The problem
 
@@ -74,6 +76,7 @@ Some load-bearing choices:
 | Database | PostgreSQL 16                                           |
 | Photos   | S3, private bucket, presigned URLs both directions      |
 | CI       | GitHub Actions — ruff, pytest, tsc, eslint, prettier    |
+| Tests    | 270, with 99% coverage on the engine                     |
 
 ## Running it
 
@@ -161,6 +164,7 @@ gym-app/
 | 1     | Weight loop — entry, smoothed trend, goals, onboarding   | done  |
 | 2     | Workout logging, last-set prefill, PRs, offline queue    | done  |
 | 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | done  |
-| 4     | Photos, suggestions engine, recap, TestFlight, App Store | next  |
+| 4     | Photos, suggestions engine, recap, account deletion      | done  |
+| 4b    | S3 bucket, EAS build, TestFlight, App Store submission   | needs accounts |
 
 Decisions made along the way are logged in [DECISIONS.md](DECISIONS.md).

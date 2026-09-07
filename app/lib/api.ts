@@ -227,3 +227,39 @@ export async function getActiveGoal(): Promise<Goal | null> {
     throw error;
   }
 }
+
+// --- photos ----------------------------------------------------------------
+
+export type Photo = {
+  id: number;
+  taken_on: IsoDate;
+  view_url: string;
+  thumb_url: string | null;
+};
+
+export type PhotoContentType = 'image/jpeg' | 'image/png' | 'image/heic';
+
+/**
+ * Not queued: the upload URL expires in ten minutes, so a request deferred
+ * until connectivity returns would arrive with a dead URL. Photos need a live
+ * connection by nature — the bytes have to go somewhere.
+ */
+export const presignPhoto = (content_type: PhotoContentType) =>
+  api.post<{ upload_url: string; s3_key: string }>('/photos/presign', { content_type });
+
+/** Queued: idempotent on s3_key server-side, so a retry cannot duplicate. */
+export const confirmPhoto = (s3_key: string, taken_on: IsoDate) =>
+  enqueue<Photo>('POST', '/photos', { s3_key, taken_on });
+
+export const getPhotos = (year: number, month: number) =>
+  api.get<Photo[]>(`/photos?year=${year}&month=${month}`);
+
+export const deletePhoto = (id: number) => api.delete<void>(`/photos/${id}`);
+
+// --- account ---------------------------------------------------------------
+
+/** Irreversible. Not queued — the user must see it succeed or fail. */
+export const deleteAccount = () =>
+  api.post<{ deleted_photos: number; supabase_user_pending: boolean }>('/account/delete', {
+    confirm: 'DELETE',
+  });

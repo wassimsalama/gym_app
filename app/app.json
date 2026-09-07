@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wassimsalama.gymapp"
+      "bundleIdentifier": "com.wassimsalama.gymapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Gym App uses the camera so you can take progress photos. They are stored privately in your own account and are never shared.",
+        "NSPhotoLibraryUsageDescription": "Gym App needs photo access so you can pick an existing progress photo. Only the photo you choose is uploaded, privately to your own account."
+      }
     },
     "android": {
       "package": "com.wassimsalama.gymapp",
