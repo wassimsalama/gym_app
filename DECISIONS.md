@@ -16,6 +16,30 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Hosting: Cloudflare Pages, Railway, Supabase — **Wes's call**
+
+- **Web on Cloudflare Pages.** Free, and `expo export --platform web` produces
+  exactly the static folder it wants. The domain is on the same account.
+- **API on Railway**, ~$5/month. Render's free tier was rejected outright: it
+  sleeps after 15 minutes and a first visitor waits 30–60 seconds, which is how
+  a "try my app" link dies. Cloud Run would have been near-free with a 1–3
+  second cold start; Wes chose always-on simplicity over saving £4.
+- **Database on the existing Supabase Postgres** rather than a fourth service.
+  §3 allows it, it costs nothing, and it is already provisioned.
+
+Two production details that are easy to get wrong and fail confusingly:
+
+`TRUST_PROXY_HEADERS` must be **true** on Railway. It is a proxy, so without it
+every request appears to come from the same address and the per-address rate
+limit throttles all users collectively.
+
+`ALLOWED_ORIGINS` must be set to the real site origin. Left unset, the API
+falls back to allowing localhost only — so the deployed site is blocked by CORS
+and every request reports "could not reach the server", pointing at the network
+rather than at configuration. Verified by running the built image with a
+production origin: the real origin is allowed and localhost is refused, which
+is the fallback correctly switching itself off.
+
 ## 2026-09-07 — The web becomes the target; App Store dropped — **Wes's call**
 
 Wes decided not to pay for the Apple Developer Program and will host the app as
