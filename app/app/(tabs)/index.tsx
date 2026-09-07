@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -21,7 +14,6 @@ import { formatDelta, formatWeight } from '@/lib/units';
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { session } = useAuth();
   const unit = useUnit();
 
@@ -107,7 +99,7 @@ export default function DashboardScreen() {
                   </Text>
                 ) : null}
               </View>
-              <WeightChart series={weight?.series ?? []} unit={unit} width={width - 72} />
+              <WeightChart series={weight?.series ?? []} unit={unit} />
             </Card>
 
             {goal ? (
