@@ -9,6 +9,7 @@ import { WeightChart } from '@/components/WeightChart';
 import { ApiError, getDashboard, type Dashboard } from '@/lib/api';
 import { signOut, useAuth } from '@/lib/auth';
 import { formatLong } from '@/lib/dates';
+import { driftFromBaselineKg } from '@/lib/goalState';
 import { useUnit } from '@/lib/profile';
 import { formatDelta, formatWeight } from '@/lib/units';
 
@@ -56,6 +57,7 @@ export default function DashboardScreen() {
 
   const weight = data?.weight;
   const goal = data?.goal ?? null;
+  const baselineDrift = goal ? driftFromBaselineKg(goal, weight?.current_smoothed_kg) : null;
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -104,26 +106,54 @@ export default function DashboardScreen() {
 
             {goal ? (
               <Card title="Goal">
-                <ProgressBar
-                  pct={goal.progress_pct}
-                  label="Progress"
-                  caption={
-                    goal.projected_date
-                      ? `On this trend you reach it around ${formatLong(goal.projected_date)}.`
-                      : 'Not enough of a trend yet to project a date.'
-                  }
-                />
-                {goal.on_track !== null ? (
-                  <Text
-                    className={`mt-3 text-sm font-semibold ${
-                      goal.on_track ? 'text-accent' : 'text-danger'
-                    }`}
-                  >
-                    {goal.on_track
-                      ? 'Ahead of your target date.'
-                      : 'Behind your target date at this rate.'}
+                <ProgressBar pct={goal.progress_pct} label="Progress" />
+
+                <View className="mt-4 flex-row justify-between">
+                  <View>
+                    <Text className="text-xs text-muted">Start</Text>
+                    <Text className="mt-0.5 text-base font-semibold text-white">
+                      {formatWeight(goal.start_weight_kg, unit)}
+                    </Text>
+                  </View>
+                  <View className="items-center">
+                    <Text className="text-xs text-muted">Now</Text>
+                    <Text className="mt-0.5 text-base font-semibold text-white">
+                      {formatWeight(weight?.current_smoothed_kg, unit)}
+                    </Text>
+                  </View>
+                  <View className="items-end">
+                    <Text className="text-xs text-muted">Goal</Text>
+                    <Text className="mt-0.5 text-base font-semibold text-accent">
+                      {formatWeight(goal.goal_weight_kg, unit)}
+                    </Text>
+                  </View>
+                </View>
+
+                {baselineDrift !== null ? (
+                  <Text className="mt-4 text-xs text-muted">
+                    You&apos;re {formatWeight(baselineDrift, unit)} above where this goal started,
+                    so it reads 0%. Restart it from the Weight tab to measure from today.
                   </Text>
-                ) : null}
+                ) : (
+                  <>
+                    <Text className="mt-4 text-xs text-muted">
+                      {goal.projected_date
+                        ? `On this trend you reach it around ${formatLong(goal.projected_date)}.`
+                        : 'Not enough of a trend yet to project a date.'}
+                    </Text>
+                    {goal.on_track !== null ? (
+                      <Text
+                        className={`mt-2 text-sm font-semibold ${
+                          goal.on_track ? 'text-accent' : 'text-danger'
+                        }`}
+                      >
+                        {goal.on_track
+                          ? 'Ahead of your target date.'
+                          : 'Behind your target date at this rate.'}
+                      </Text>
+                    ) : null}
+                  </>
+                )}
               </Card>
             ) : null}
 

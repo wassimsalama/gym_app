@@ -20,6 +20,7 @@ import { SegmentedControl } from '@/components/SegmentedControl';
 import { WeightChart } from '@/components/WeightChart';
 import {
   ApiError,
+  createGoal,
   getActiveGoal,
   getDashboard,
   putDailyLog,
@@ -34,6 +35,7 @@ import {
   today,
   type IsoDate,
 } from '@/lib/dates';
+import { driftFromBaselineKg } from '@/lib/goalState';
 import { useUnit } from '@/lib/profile';
 import {
   deltaOver,
@@ -61,6 +63,7 @@ export default function Weight() {
   // editor needs them. §6's one-request rule covers the home tab, not this one.
   const [goalRecord, setGoalRecord] = useState<Goal | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
+  const [reanchoring, setReanchoring] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -138,6 +141,21 @@ export default function Weight() {
     [data, unit],
   );
 
+  /** Reopen the goal from today's weight, keeping the same target. */
+  const reanchor = useCallback(async () => {
+    if (!goalRecord) return;
+    setReanchoring(true);
+    setError(null);
+    try {
+      await createGoal(goalRecord.goal_weight_kg, goalRecord.target_date);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : 'Could not restart the goal');
+    } finally {
+      setReanchoring(false);
+    }
+  }, [goalRecord, load]);
+
   const save = useCallback(async () => {
     const kg = parseWeightInput(entry, unit);
     if (kg === null) {
@@ -173,19 +191,15 @@ export default function Weight() {
   const unavailable = useMemo(() => unavailableRanges(series), [series]);
 
   /**
-   * How far past the starting weight, in the wrong direction, the user now is
-   * — or null when they are somewhere between start and goal as expected.
-   * A progress bar reading 0% needs to say why.
+   * How far the wrong side of the baseline the user is, or null when the goal
+   * is tracking normally. Non-null means the bar is pinned at 0% and will stay
+   * there until they claw back past the old starting weight — so the card
+   * offers to re-anchor rather than just sitting dead.
    */
-  const movedAwayBy = useMemo(() => {
-    const current = weight?.current_smoothed_kg;
-    if (!goalRecord || current == null) return null;
-
-    const losing = goalRecord.goal_weight_kg < goalRecord.start_weight_kg;
-    const drift = current - goalRecord.start_weight_kg;
-    const wrongWay = losing ? drift > 0 : drift < 0;
-    return wrongWay ? Math.abs(drift) : null;
-  }, [goalRecord, weight]);
+  const movedAwayBy = useMemo(
+    () => (goalRecord ? driftFromBaselineKg(goalRecord, weight?.current_smoothed_kg) : null),
+    [goalRecord, weight],
+  );
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -323,29 +337,61 @@ export default function Weight() {
               </View>
             </View>
 
-            <Text className="mt-4 text-xs text-muted">
-              {movedAwayBy !== null
-                ? `You're ${formatWeight(movedAwayBy, unit)} the wrong side of where this goal started, so progress reads 0%. Started ${formatLong(goalRecord.start_date)}.`
-                : goal.projected_date
-                  ? `On this trend you reach it around ${formatLong(goal.projected_date)}.`
-                  : 'Not enough of a trend yet to project a date.'}
-            </Text>
+            {movedAwayBy === null ? (
+              <>
+                <Text className="mt-4 text-xs text-muted">
+                  {goal.projected_date
+                    ? `On this trend you reach it around ${formatLong(goal.projected_date)}.`
+                    : 'Not enough of a trend yet to project a date.'}
+                </Text>
 
-            {goal.on_track !== null ? (
-              <Text
-                className={`mt-2 text-sm font-semibold ${
-                  goal.on_track ? 'text-accent' : 'text-danger'
-                }`}
-              >
-                {goal.on_track
-                  ? 'Ahead of your target date.'
-                  : 'Behind your target date at this rate.'}
-              </Text>
-            ) : null}
+                {goal.on_track !== null ? (
+                  <Text
+                    className={`mt-2 text-sm font-semibold ${
+                      goal.on_track ? 'text-accent' : 'text-danger'
+                    }`}
+                  >
+                    {goal.on_track
+                      ? 'Ahead of your target date.'
+                      : 'Behind your target date at this rate.'}
+                  </Text>
+                ) : null}
 
-            <View className="mt-4">
-              <Button title="Edit goal" variant="ghost" onPress={() => setEditingGoal(true)} />
-            </View>
+                <View className="mt-4">
+                  <Button title="Edit goal" variant="ghost" onPress={() => setEditingGoal(true)} />
+                </View>
+              </>
+            ) : (
+              /* The baseline is behind the user. The bar cannot move until they
+                 lose their way back to it, so offer the fix here rather than
+                 leaving a dead bar and burying re-anchoring in a sub-screen. */
+              <View className="mt-4 rounded-xl border border-line bg-ink p-4">
+                <Text className="text-sm font-semibold text-white">
+                  This goal started at {formatWeight(goalRecord.start_weight_kg, unit)}
+                </Text>
+                <Text className="mt-2 text-xs text-muted">
+                  You&apos;re {formatWeight(movedAwayBy, unit)} above that now, so the bar reads 0%
+                  and will stay there until you get back under{' '}
+                  {formatWeight(goalRecord.start_weight_kg, unit)}. Re-anchoring measures progress
+                  from today instead.
+                </Text>
+
+                <View className="mt-4">
+                  <Button
+                    title={`Restart from ${formatWeight(weight?.current_smoothed_kg, unit)}`}
+                    onPress={reanchor}
+                    loading={reanchoring}
+                  />
+                </View>
+                <View className="mt-2">
+                  <Button
+                    title="Edit goal instead"
+                    variant="ghost"
+                    onPress={() => setEditingGoal(true)}
+                  />
+                </View>
+              </View>
+            )}
           </Card>
         ) : null}
       </ScrollView>
