@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { PasswordInput } from '@/components/PasswordInput';
 import { signIn } from '@/lib/auth';
 
 export default function SignIn() {
@@ -44,17 +45,16 @@ export default function SignIn() {
           value={email}
           onChangeText={setEmail}
         />
-        <TextInput
-          className="h-14 rounded-2xl border border-line bg-surface px-4 text-base text-white"
-          placeholder="Password"
-          placeholderTextColor="#8A97A6"
-          autoCapitalize="none"
+        <PasswordInput
           autoComplete="current-password"
-          secureTextEntry
           value={password}
           onChangeText={setPassword}
           onSubmitEditing={onSubmit}
         />
+
+        <Link href="/forgot-password" asChild>
+          <Text className="-mt-1 text-right text-sm text-muted">Forgotten your password?</Text>
+        </Link>
 
         {error ? <Text className="text-sm text-danger">{error}</Text> : null}
 

@@ -164,6 +164,11 @@ Both matter more once strangers can reach the site.
 
 - **Authentication → Providers → Email → Confirm email: ON.**
   Otherwise anyone can register with an address they do not own.
+- **Authentication → URL Configuration → Redirect URLs** — add
+  `https://<your-site>/reset-password` and, for local work,
+  `http://localhost:8081/reset-password`. Password-reset links go to an address
+  Supabase has not been told to allow are silently refused, which looks like a
+  broken email rather than a missing setting.
 - **Authentication → Rate Limits** — sign-up and sign-in never touch the API, so
   they cannot be throttled there. This is the only place that governs them. (In
   some dashboard versions this sits under **Authentication → Attack Protection**.)

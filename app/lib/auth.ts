@@ -111,3 +111,26 @@ export async function signUp(email: string, password: string) {
 export async function signOut() {
   return supabase.auth.signOut();
 }
+
+/** Where the reset link should land. Must be listed in Supabase's redirect allow-list. */
+function resetRedirectUrl(): string | undefined {
+  if (Platform.OS !== 'web') return process.env.EXPO_PUBLIC_RESET_URL;
+  return `${globalThis.location?.origin ?? ''}/reset-password`;
+}
+
+/**
+ * Send a reset link. Resolves the same way whether or not the address has an
+ * account — telling a stranger which emails are registered is an account
+ * enumeration hole, and Supabase deliberately does not distinguish.
+ */
+export async function requestPasswordReset(email: string) {
+  return supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: resetRedirectUrl(),
+  });
+}
+
+/** Set a new password. Requires a live session — either signed in, or arrived
+ * via a recovery link, which Supabase exchanges for a temporary one. */
+export async function updatePassword(password: string) {
+  return supabase.auth.updateUser({ password });
+}

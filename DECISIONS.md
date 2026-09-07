@@ -16,6 +16,31 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Password reset and a reveal toggle — **Wes's request**
+
+§10 specified email/password sign-in and said nothing about recovery, so the
+app shipped with no way back in for anyone who forgot their password. Fine
+while Wes was the only user; not fine for family and friends.
+
+Added: a forgot-password screen, an emailed reset link, a screen to set the new
+password, and change-password for someone already signed in. Every password
+field can now be unmasked — typing a password blind on a phone keyboard is how
+people lock themselves out, and masking by default with an opt-in reveal costs
+nothing.
+
+One structural detail worth recording. `reset-password` sits at the top level,
+outside both auth guards, because clicking the emailed link *creates a
+session* — a screen gated on not having one would have bounced the user away
+before they could type anything. That would have been an intermittent,
+baffling bug.
+
+The reset request resolves identically whether or not the address has an
+account. Distinguishing them would let a stranger enumerate which emails are
+registered.
+
+Requires Supabase → Authentication → URL Configuration to list the redirect
+URL, or the link is refused and it looks like a mail delivery problem.
+
 ## 2026-09-07 — Dashboard cut from 23 database round trips to 8
 
 Measuring the region problem turned up the underlying issue: the endpoint asked

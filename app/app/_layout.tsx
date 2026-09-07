@@ -49,6 +49,14 @@ export default function RootLayout() {
       */}
       <AppFrame>
         <Stack screenOptions={{ headerShown: false }}>
+          {/*
+            Outside both guards on purpose. Clicking the emailed recovery link
+            creates a session, so a screen gated on *not* having one would
+            bounce the user away before they could set a password.
+          */}
+          <Stack.Screen name="reset-password" />
+          <Stack.Screen name="forgot-password" />
+
           <Stack.Protected guard={!!session}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="onboarding" />
