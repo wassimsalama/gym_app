@@ -16,6 +16,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { ProgressBar } from '@/components/ProgressBar';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import { WeightChart } from '@/components/WeightChart';
 import { ApiError, getDashboard, putDailyLog, type Dashboard } from '@/lib/api';
 import {
@@ -27,6 +28,14 @@ import {
   type IsoDate,
 } from '@/lib/dates';
 import { useUnit } from '@/lib/profile';
+import {
+  deltaOver,
+  RANGE_OPTIONS,
+  rangeLabel,
+  sliceSeries,
+  unavailableRanges,
+  type RangeKey,
+} from '@/lib/ranges';
 import { formatDelta, formatWeight, fromKg, parseWeightInput } from '@/lib/units';
 
 export default function Weight() {
@@ -35,6 +44,7 @@ export default function Weight() {
   const unit = useUnit();
   const input = useRef<TextInput>(null);
 
+  const [range, setRange] = useState<RangeKey>('1M');
   const [logDate, setLogDate] = useState<IsoDate>(today());
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState<IsoDate>(startOfMonth());
@@ -141,6 +151,13 @@ export default function Weight() {
   const goal = data?.goal ?? null;
   const isToday = logDate === today();
 
+  // Memoised so the fallback does not mint a fresh array on every render and
+  // invalidate everything downstream of it.
+  const series = useMemo(() => weight?.series ?? [], [weight]);
+  const visible = useMemo(() => sliceSeries(series, range), [series, range]);
+  const rangeDelta = useMemo(() => deltaOver(visible), [visible]);
+  const unavailable = useMemo(() => unavailableRanges(series), [series]);
+
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
       <View className="px-5 pb-3 pt-2">
@@ -203,7 +220,7 @@ export default function Weight() {
         </Card>
 
         <Card
-          title="Trend"
+          title="History"
           footnote="Faint dots are daily readings; the bold line is the 7-day average. Judge progress by the line."
         >
           {loading ? (
@@ -212,21 +229,40 @@ export default function Weight() {
             </View>
           ) : (
             <>
-              <View className="mb-3 flex-row items-baseline gap-3">
+              <View className="mb-3">
+                <SegmentedControl
+                  options={RANGE_OPTIONS}
+                  value={range}
+                  onChange={setRange}
+                  disabledValues={unavailable}
+                />
+              </View>
+
+              <View className="mb-3">
                 <Text className="text-3xl font-bold text-white">
                   {formatWeight(weight?.current_smoothed_kg, unit)}
                 </Text>
-                {weight?.delta_since_start_kg != null ? (
-                  <Text
-                    className={`text-base font-semibold ${
-                      weight.delta_since_start_kg <= 0 ? 'text-accent' : 'text-muted'
-                    }`}
-                  >
-                    {formatDelta(weight.delta_since_start_kg, unit)} since start
-                  </Text>
-                ) : null}
+                <Text className="mt-1 text-sm text-muted">
+                  {rangeDelta === null ? (
+                    'Not enough logged in this span to show a change yet.'
+                  ) : (
+                    <>
+                      <Text
+                        className={`font-semibold ${
+                          rangeDelta <= 0 ? 'text-accent' : 'text-white'
+                        }`}
+                      >
+                        {formatDelta(rangeDelta, unit)}
+                      </Text>
+                      {` over ${rangeLabel(range).toLowerCase()} · ${visible.length} ${
+                        visible.length === 1 ? 'entry' : 'entries'
+                      }`}
+                    </>
+                  )}
+                </Text>
               </View>
-              <WeightChart series={weight?.series ?? []} unit={unit} width={width - 72} />
+
+              <WeightChart series={visible} unit={unit} width={width - 72} />
             </>
           )}
         </Card>
