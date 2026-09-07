@@ -1,0 +1,17 @@
+# The image only needs api/. Everything else is noise that slows the upload and
+# invalidates layers for no reason.
+app/
+.git/
+.github/
+.expo/
+node_modules/
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.env
+api/tests/
+scripts/.cache/
+*.md
