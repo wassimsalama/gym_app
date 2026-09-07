@@ -16,6 +16,35 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-07 — Photos use Supabase Storage, not S3 — **approved by Wes**
+
+§3 and §9 specify S3 with presigned URLs. Supabase Storage was chosen instead:
+the project already exists, the model is identical (private bucket, signed URLs
+both directions, bytes never touching the API), and it avoids standing up an
+AWS account, a credit card and IAM for one bucket.
+
+A §14.1 item 6 stack deviation. The cost of reversing it is one file:
+`app/core/storage.py` is the entire difference, and all 17 photo and account
+tests passed unchanged across the swap — which is the evidence the boundary is
+in the right place. §9's other rules are unaffected: keys stay
+`{user_id}/{uuid}.jpg`, uploads are content-type restricted, view URLs live an
+hour, and account deletion still sweeps by prefix.
+
+`boto3` came out again; `httpx` moved from a dev dependency to a runtime one.
+
+The service-role key is server-only and bypasses row-level security, so it
+lives in `api/.env` and must never reach `app/.env`. Storage failures are
+mapped to a bare 502 rather than passed through, because the provider's
+response body can echo the key.
+
+## 2026-09-07 — Settings resolve `.env` from the package, not the CWD
+
+Found by running `scripts/check_storage.py` from the repo root: it printed
+`replace-me.supabase.co` because pydantic-settings resolved `.env` relative to
+the working directory and silently fell back to defaults. Any script run from
+anywhere but `api/` was reading the wrong configuration — quietly, which is the
+dangerous part.
+
 ## 2026-09-07 — `GET /dashboard?date=` — **approved by Wes**
 
 §6 forbids the server deriving "today" from UTC, and specifies `GET /dashboard`

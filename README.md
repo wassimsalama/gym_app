@@ -74,9 +74,9 @@ Some load-bearing choices:
 | Auth     | Supabase Auth (email/password), ES256 JWT verified via JWKS |
 | API      | FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic           |
 | Database | PostgreSQL 16                                           |
-| Photos   | S3, private bucket, presigned URLs both directions      |
+| Photos   | Supabase Storage, private bucket, signed URLs both ways  |
 | CI       | GitHub Actions — ruff, pytest, tsc, eslint, prettier    |
-| Tests    | 270, with 99% coverage on the engine                     |
+| Tests    | 285, with 99% coverage on the engine                     |
 
 ## Running it
 
@@ -165,6 +165,6 @@ gym-app/
 | 2     | Workout logging, last-set prefill, PRs, offline queue    | done  |
 | 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | done  |
 | 4     | Photos, suggestions engine, recap, account deletion      | done  |
-| 4b    | S3 bucket, EAS build, TestFlight, App Store submission   | needs accounts |
+| 4b    | EAS build, TestFlight, App Store submission              | needs Apple account |
 
 Decisions made along the way are logged in [DECISIONS.md](DECISIONS.md).

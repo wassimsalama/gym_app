@@ -6,6 +6,7 @@ app/core/auth.py
 app/core/certs.py
 app/core/config.py
 app/core/db.py
+app/core/storage.py
 app/models/__init__.py
 app/models/base.py
 app/models/daily_log.py
@@ -16,17 +17,20 @@ app/models/profile.py
 app/models/workout.py
 app/routers/__init__.py
 app/routers/_dashboard_data.py
+app/routers/account.py
 app/routers/daily_logs.py
 app/routers/dashboard.py
 app/routers/exercises.py
 app/routers/goals.py
 app/routers/health.py
+app/routers/photos.py
 app/routers/workout_sessions.py
 app/schemas/__init__.py
 app/schemas/daily_log.py
 app/schemas/dashboard.py
 app/schemas/goal.py
 app/schemas/health.py
+app/schemas/photo.py
 app/schemas/workout.py
 app/services/__init__.py
 app/services/config.py
@@ -49,6 +53,7 @@ tests/test_dashboard.py
 tests/test_exercises.py
 tests/test_goals.py
 tests/test_health.py
+tests/test_photos.py
 tests/test_plateaus.py
 tests/test_projection.py
 tests/test_prs.py
