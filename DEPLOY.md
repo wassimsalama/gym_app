@@ -148,14 +148,31 @@ Nothing else to do — the API runs its own migrations on start.
 Build locally and upload the output. Expo's web export is a static folder, so
 there is nothing to run.
 
-```bash
-cd app
-EXPO_PUBLIC_API_URL=https://<your-api>.up.railway.app \
-EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co \
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key> \
-EXPO_PUBLIC_PRIVACY_URL=https://<your-site>/privacy.html \
-npx expo export --platform web --output-dir dist
+Production values live in **`app/.env.production`** (gitignored), leaving `.env`
+pointed at local development:
+
 ```
+EXPO_PUBLIC_API_URL=https://<your-api>.up.railway.app
+EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+```
+
+Then, from the repo root:
+
+```bash
+npm run build:web
+```
+
+That builds with the cache cleared and then verifies the output. **Do not
+substitute `expo export` on its own.** Two things bite otherwise:
+
+- Setting `EXPO_PUBLIC_*` on the command line does **not** work — Expo loads
+  `.env` and exports those variables over the top of yours.
+- Metro caches the inlined values, so an environment change with no `--clear`
+  silently reuses the previous build's URLs.
+
+Both produce a bundle that looks fine and points at your laptop. `npm run
+build:web` refuses to produce one.
 
 Then **Cloudflare → Workers & Pages → Create → Pages → Upload assets**, and drop
 in `app/dist`.

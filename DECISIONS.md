@@ -16,6 +16,35 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-08 — Production web builds are verified, not trusted
+
+The first production build came out pointing at `http://192.168.1.25:8000` —
+the laptop's LAN address. It would have loaded perfectly on Cloudflare Pages
+and failed every request for every user, with a "could not reach the server"
+message aimed at their connection.
+
+Two causes, both invisible:
+
+1. Setting `EXPO_PUBLIC_*` on the command line does not override `.env`. Expo
+   loads the file and exports those variables over the top.
+2. Metro caches the Babel transform that inlines them, so even after fixing
+   the environment the bundle kept the old value until `--clear`.
+
+Production values now live in `app/.env.production`, and `npm run build:web`
+builds with the cache cleared and then reads the bundle back, rejecting it if
+it finds a private LAN address, or if the production API URL, Supabase URL or
+privacy page are missing.
+
+The check distinguishes LAN addresses from `localhost` deliberately. A private
+IP is never a dependency's default, so its presence always means our
+configuration leaked in. `localhost` does appear in dependencies — gotrue-js
+carries an unused `http://localhost:9999` fallback — so flagging it outright
+produced a false positive on a perfectly good build. A check that cries wolf
+gets switched off.
+
+Verified both directions: it passes the real build and rejects the same build
+with a LAN address spliced in.
+
 ## 2026-09-07 — Sign-in throttling, and being honest about what it is
 
 Wes asked for protection against someone repeatedly guessing a user's password.
