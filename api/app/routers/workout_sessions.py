@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import Float, cast, func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser, WriteUser
 from app.models import Exercise, SetLog, WorkoutSession
 from app.schemas.workout import (
     PersonalRecordOut,
@@ -33,7 +34,7 @@ def _serialise(session: WorkoutSession) -> WorkoutSessionOut:
 
 @router.post("", response_model=WorkoutSessionSaved, status_code=status.HTTP_201_CREATED)
 def create_session(
-    body: WorkoutSessionCreate, user: CurrentUser, db: DbSession, response: Response
+    body: WorkoutSessionCreate, user: WriteUser, db: DbSession, response: Response
 ) -> WorkoutSessionSaved:
     """Save a session and report any PRs it set (spec §6).
 
@@ -167,7 +168,7 @@ def _best_e1rm_before(db, user_id, exercise_ids: set[int]) -> dict[int, float]:
 
 @router.get("", response_model=list[WorkoutSessionOut])
 def list_sessions(
-    user: CurrentUser,
+    user: ReadUser,
     db: DbSession,
     from_: date = Query(alias="from"),
     to: date = Query(),

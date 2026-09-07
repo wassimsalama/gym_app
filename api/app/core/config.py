@@ -43,6 +43,24 @@ class Settings(BaseSettings):
     # rotates keys rarely, and PyJWKClient refetches on an unknown `kid` anyway.
     jwks_cache_seconds: int = 600
 
+    # --- rate limiting ---------------------------------------------------
+    #
+    # Generous enough that no real person meets them: a determined logger might
+    # make a few dozen requests an hour, not hundreds. They exist to stop
+    # scripts and runaway retry loops, not to ration usage.
+    rate_limit_enabled: bool = True
+    #: Any request, keyed by client address. Catches unauthenticated flooding.
+    rate_limit_ip_per_hour: int = 1200
+    #: Reads by a signed-in user.
+    rate_limit_read_per_hour: int = 600
+    #: Writes by a signed-in user. Lower, since each one costs a database write.
+    rate_limit_write_per_hour: int = 240
+
+    #: Trust X-Forwarded-For. Set only when the API genuinely sits behind a
+    #: proxy that overwrites it (Railway, Render, Cloudflare). Left on with no
+    #: proxy in front, any client could spoof its address and evade every limit.
+    trust_proxy_headers: bool = False
+
     sql_echo: bool = Field(default=False)
 
     @property

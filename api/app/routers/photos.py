@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core import storage
-from app.core.auth import CurrentUser, DbSession
+from app.core.auth import DbSession
+from app.core.limits import ReadUser, WriteUser
 from app.models import Photo
 from app.schemas.photo import PhotoConfirm, PhotoOut, PresignRequest, PresignResponse
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/photos", tags=["photos"])
 
 
 @router.post("/presign", response_model=PresignResponse)
-def presign(body: PresignRequest, user: CurrentUser) -> PresignResponse:
+def presign(body: PresignRequest, user: WriteUser) -> PresignResponse:
     """Mint a short-lived upload URL (spec §6, §9).
 
     The key is generated here rather than accepted from the client, so a caller
@@ -28,7 +29,7 @@ def presign(body: PresignRequest, user: CurrentUser) -> PresignResponse:
 
 
 @router.post("", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
-def confirm(body: PhotoConfirm, user: CurrentUser, db: DbSession) -> PhotoOut:
+def confirm(body: PhotoConfirm, user: WriteUser, db: DbSession) -> PhotoOut:
     """Record a photo the app has already uploaded.
 
     Idempotent on `s3_key` (§8.3): the confirm call is a queued write, and a
@@ -53,7 +54,7 @@ def confirm(body: PhotoConfirm, user: CurrentUser, db: DbSession) -> PhotoOut:
 
 @router.get("", response_model=list[PhotoOut])
 def list_photos(
-    user: CurrentUser,
+    user: ReadUser,
     db: DbSession,
     year: int = Query(ge=1900, le=2200),
     month: int = Query(ge=1, le=12),
@@ -78,7 +79,7 @@ def list_photos(
 
 
 @router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_photo(photo_id: int, user: CurrentUser, db: DbSession) -> None:
+def delete_photo(photo_id: int, user: WriteUser, db: DbSession) -> None:
     """Remove the row and the object (spec §9)."""
     storage.require_configured()
 

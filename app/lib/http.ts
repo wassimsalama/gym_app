@@ -48,14 +48,23 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly detail: string,
+    /** Seconds the server asked us to wait, from its Retry-After header. */
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(detail);
     this.name = 'ApiError';
   }
 
-  /** Worth retrying from the sync queue: the request never reached a verdict. */
+  /**
+   * Worth retrying from the sync queue.
+   *
+   * 429 belongs here and its absence was a real bug: a rate-limited write
+   * would have been treated as permanently rejected and dropped, losing the
+   * user's logged workout. Being told "slow down" is the opposite of being
+   * told "never ask again".
+   */
   get isRetryable(): boolean {
-    return this.status === 0 || this.status === 408 || this.status >= 500;
+    return this.status === 0 || this.status === 408 || this.status === 429 || this.status >= 500;
   }
 }
 
@@ -126,7 +135,14 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const payload = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    throw new ApiError(response.status, extractDetail(payload, response.statusText));
+    // The server knows when a slot frees up; guessing would either hammer it
+    // or wait far longer than necessary.
+    const retryAfter = Number(response.headers.get('Retry-After'));
+    throw new ApiError(
+      response.status,
+      extractDetail(payload, response.statusText),
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+    );
   }
 
   return payload as T;

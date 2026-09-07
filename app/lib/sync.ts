@@ -127,7 +127,15 @@ async function recordFailure(id: number, attempts: number, error: unknown): Prom
     return;
   }
 
-  await store.bumpAttempt(id, new Date(Date.now() + backoffMs(attempts)).toISOString());
+  // Honour Retry-After when the server sent one — it knows exactly when a slot
+  // frees up, and our own backoff would only guess.
+  const askedFor =
+    error instanceof ApiError && error.retryAfterSeconds !== null
+      ? error.retryAfterSeconds * 1000
+      : null;
+  const wait = Math.max(askedFor ?? 0, backoffMs(attempts));
+
+  await store.bumpAttempt(id, new Date(Date.now() + wait).toISOString());
 }
 
 /**

@@ -84,6 +84,12 @@ os.environ["SUPABASE_STORAGE_BUCKET"] = ""
 os.environ["SUPABASE_SERVICE_KEY"] = ""
 os.environ["ALLOWED_ORIGINS"] = ""
 
+# The suite shares one client address, so a few hundred tests would eventually
+# trip the per-address limit and start failing for reasons unrelated to the code
+# under test. Rate limiting is exercised deliberately in test_ratelimit.py, with
+# the setting turned back on there.
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 import uuid  # noqa: E402
 from collections.abc import Generator  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
