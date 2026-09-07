@@ -3,10 +3,9 @@
 Nutrition, training, weight, recovery and progress photos in one place — and
 evidence-based suggestions derived from the combination.
 
-> **Status: feature-complete.** All five tabs, the engine and the offline queue
-> are built and tested. What remains is infrastructure — an S3 bucket for
-> photos and an Apple Developer account for TestFlight. See the
-> [roadmap](#roadmap).
+> **Status: feature-complete and deployable.** All five tabs, the engine, the
+> offline queue, rate limiting and first-party analytics are built and tested.
+> See [DEPLOY.md](DEPLOY.md) to put it online.
 
 ## The problem
 
@@ -75,8 +74,9 @@ Some load-bearing choices:
 | API      | FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic           |
 | Database | PostgreSQL 16                                           |
 | Photos   | Supabase Storage, private bucket, signed URLs both ways  |
+| Hosting  | Cloudflare Pages (web), Railway (API), Supabase (data)   |
 | CI       | GitHub Actions — ruff, pytest, tsc, eslint, prettier    |
-| Tests    | 285, with 99% coverage on the engine                     |
+| Tests    | 335, with 99% coverage on the engine                     |
 
 ## Running it
 
@@ -127,8 +127,10 @@ ipconfig getifaddr en0        # -> e.g. 192.168.1.42
 ```
 
 ```bash
-npm start                     # scan the QR code with Expo Go
+npm run web                   # opens in your browser
 ```
+
+Or from the repo root: `npm run db`, `npm run api`, `npm run web`.
 
 ### Checks
 
@@ -165,6 +167,7 @@ gym-app/
 | 2     | Workout logging, last-set prefill, PRs, offline queue    | done  |
 | 3     | Nutrition, streaks, volume rings, TDEE, dashboard        | done  |
 | 4     | Photos, suggestions engine, recap, account deletion      | done  |
-| 4b    | EAS build, TestFlight, App Store submission              | needs Apple account |
+| 4b    | Web pivot: rate limits, analytics, privacy policy        | done  |
+| 5     | Deploy — Cloudflare Pages, Railway, Supabase Postgres    | [DEPLOY.md](DEPLOY.md) |
 
 Decisions made along the way are logged in [DECISIONS.md](DECISIONS.md).
