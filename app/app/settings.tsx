@@ -1,6 +1,15 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -22,6 +31,14 @@ export default function Settings() {
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayError | null>(null);
+
+  function openPrivacy() {
+    // The page ships inside the web build, so on the web it is a relative path
+    // and needs no host of its own. A native build has no such document, so it
+    // points at the deployed site.
+    const native = process.env.EXPO_PUBLIC_PRIVACY_URL;
+    void Linking.openURL(Platform.OS === 'web' ? '/privacy.html' : (native ?? '/privacy.html'));
+  }
 
   /**
    * Account deletion (spec §10, §13).
@@ -72,9 +89,21 @@ export default function Settings() {
 
         <Card title="Privacy">
           <Text className="text-sm text-muted">
-            Your photos live in private storage and are only ever reachable through short-lived
-            links generated for your device. Nothing is shared, and there is no analytics or
-            tracking in this app.
+            Everything stored is something you typed in. Photos live in private storage, reachable
+            only through short-lived links generated for your device. There is no advertising, no
+            tracking and no analytics SDK, and nothing is shared.
+          </Text>
+          <View className="mt-4">
+            <Button title="Read the privacy policy" variant="ghost" onPress={openPrivacy} />
+          </View>
+        </Card>
+
+        <Card title="Stored on this device">
+          <Text className="text-sm text-muted">
+            This app sets no cookies. It keeps your sign-in session and the last screen you loaded
+            in local storage, and anything you log while offline in a local database until it can be
+            sent. Both are needed for the app to work, neither is used to track you, and signing out
+            clears them.
           </Text>
         </Card>
 

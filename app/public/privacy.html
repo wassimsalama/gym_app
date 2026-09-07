@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy — Gym App</title>
+    <style>
+      :root { color-scheme: dark light; }
+      body {
+        margin: 0 auto; padding: 2.5rem 1.25rem 5rem; max-width: 44rem;
+        font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0b0f14; color: #e6edf3;
+      }
+      h1 { font-size: 1.9rem; margin: 0 0 .35rem; }
+      h2 { font-size: 1.15rem; margin: 2.4rem 0 .6rem; color: #4ade80; }
+      p, li { color: #c4cdd8; }
+      .sub { color: #8a97a6; margin: 0 0 2rem; }
+      table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: .93rem; }
+      th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid #232c36; vertical-align: top; }
+      th { color: #8a97a6; font-weight: 600; }
+      code { background: #141a21; padding: .1rem .35rem; border-radius: .25rem; font-size: .88em; }
+      .note { border-left: 3px solid #4ade80; padding: .1rem 0 .1rem 1rem; margin: 1.4rem 0; }
+      a { color: #4ade80; }
+      footer { margin-top: 3.5rem; padding-top: 1.2rem; border-top: 1px solid #232c36; color: #8a97a6; font-size: .9rem; }
+      @media (prefers-color-scheme: light) {
+        body { background: #fff; color: #17212b; }
+        p, li { color: #33414f; }
+        .sub, th, footer { color: #5b6875; }
+        code { background: #f0f3f6; }
+        th, td, footer, .note { border-color: #dde3ea; }
+        h2 { color: #1a7f4b; }
+        a { color: #1a7f4b; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Privacy</h1>
+    <p class="sub">Last updated 7 September 2026</p>
+
+    <p>
+      Gym App is a personal project run by one person. It records what you log about
+      your own training and nothing else. There is no advertising, no tracking, no
+      analytics SDK, and your data is never sold or shared.
+    </p>
+
+    <div class="note">
+      <p>
+        <strong>The short version.</strong> Everything stored is something you typed
+        into the app. Nobody else can see it. You can delete all of it from inside the
+        app at any time, and deletion is immediate and permanent.
+      </p>
+    </div>
+
+    <h2>What is stored</h2>
+    <table>
+      <tr><th>Data</th><th>Why</th></tr>
+      <tr><td>Email address and password</td><td>To sign you in. Handled by Supabase Auth; the password is never visible to this app.</td></tr>
+      <tr><td>Body weight, by date</td><td>To draw your trend and estimate maintenance calories.</td></tr>
+      <tr><td>Calories, protein, carbs, fat</td><td>To show intake against maintenance.</td></tr>
+      <tr><td>Workouts: exercises, sets, weights, reps, notes</td><td>To pre-fill your next session and detect personal records.</td></tr>
+      <tr><td>Goals: start weight, target weight, dates</td><td>To show progress and project a finish date.</td></tr>
+      <tr><td>Progress photos</td><td>Only if you add them. Stored privately; see below.</td></tr>
+      <tr><td>Display unit (kg or lb)</td><td>To show weights the way you prefer.</td></tr>
+      <tr><td>Which days you opened the app</td><td>A date per day, so the developer can see how many people use it. Nothing about what you did.</td></tr>
+    </table>
+
+    <h2>What is not stored</h2>
+    <ul>
+      <li>No IP addresses or approximate location.</li>
+      <li>No device fingerprints, browser or user-agent records.</li>
+      <li>No advertising or analytics SDKs of any kind.</li>
+      <li>No cookies. See <a href="#storage">storage</a> below.</li>
+      <li>No record of individual pages you visit or buttons you press.</li>
+    </ul>
+
+    <h2>Health data</h2>
+    <p>
+      Body weight, nutrition and training records are health-related data, which UK and
+      EU law treat as a special category needing explicit consent. Yours is given by
+      choosing to enter it. You are never required to log anything, every field is
+      optional, and you can stop and delete it all at any time.
+    </p>
+
+    <h2>Photos</h2>
+    <p>
+      Progress photos are stored in a private bucket that is not readable from the open
+      internet. When you view one, the app generates a signed link that works only for
+      your session and expires within the hour. Photos are resized on your device before
+      upload. They are never used for anything but showing them back to you.
+    </p>
+
+    <h2 id="storage">Storage on your device</h2>
+    <p>
+      The app sets <strong>no cookies</strong>. It uses two browser storage mechanisms,
+      both strictly necessary for it to function:
+    </p>
+    <ul>
+      <li>
+        <code>localStorage</code> — holds your sign-in session so you are not asked to
+        log in on every page, and caches the last screen you loaded so it still shows
+        something with no connection.
+      </li>
+      <li>
+        <code>IndexedDB</code> — holds anything you log while offline until it can be
+        sent. Without it, a workout logged in a basement gym would be lost.
+      </li>
+    </ul>
+    <p>
+      Neither is used to track you, and neither leaves your device except as the data
+      described above. Signing out clears both.
+    </p>
+
+    <h2>Who else is involved</h2>
+    <table>
+      <tr><th>Service</th><th>What it handles</th></tr>
+      <tr><td>Supabase</td><td>Sign-in, the database, and private photo storage.</td></tr>
+      <tr><td>The application host</td><td>Runs the website and the API.</td></tr>
+    </table>
+    <p>
+      Both are processors acting on instructions, not partners with rights to your data.
+      No one else receives it.
+    </p>
+
+    <h2>Deleting your data</h2>
+    <p>
+      Open <strong>Settings &rarr; Delete account</strong> in the app. Your weight
+      history, workouts, nutrition logs, goals and photos are removed immediately and
+      permanently. There is no soft delete, no grace period and no archived copy. Ask
+      by email if you would rather it were done for you.
+    </p>
+
+    <h2>Your rights</h2>
+    <p>
+      Under UK GDPR you may request access to your data, correction, deletion, or a
+      copy in a portable form, and you may object to processing or withdraw consent.
+      In practice the app already shows you everything it holds and lets you delete all
+      of it yourself. For anything else, email the address below. If you are unhappy
+      with the response you can complain to the Information Commissioner’s Office at
+      <a href="https://ico.org.uk">ico.org.uk</a>.
+    </p>
+
+    <h2>How long it is kept</h2>
+    <p>
+      Until you delete it. There is no automatic expiry, because a training history is
+      only useful over years. If the project shuts down, accounts will be deleted and
+      users told beforehand.
+    </p>
+
+    <h2>Changes</h2>
+    <p>
+      If this policy changes in a way that affects what is collected or who sees it,
+      the app will say so before the change applies. The date at the top always
+      reflects the current version.
+    </p>
+
+    <footer>
+      <p>
+        Questions or requests: <a href="mailto:wassimsalamaa1@gmail.com">wassimsalamaa1@gmail.com</a><br />
+        Gym App is a personal project, not a company, and is not medical advice.
+      </p>
+    </footer>
+  </body>
+</html>
