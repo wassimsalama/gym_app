@@ -52,12 +52,75 @@ export function startOfWeek(iso: IsoDate = today()): IsoDate {
   return addDays(iso, -dayOfWeek);
 }
 
+/** First day of the month containing `iso`. */
+export function startOfMonth(iso: IsoDate = today()): IsoDate {
+  const date = fromIsoDate(iso);
+  return toIsoDate(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+/** Shift by whole months, clamping the day (31 Jan + 1 month -> 28/29 Feb). */
+export function addMonths(iso: IsoDate, months: number): IsoDate {
+  const date = fromIsoDate(iso);
+  const targetMonth = date.getMonth() + months;
+  const shifted = new Date(date.getFullYear(), targetMonth, 1);
+  const lastDay = new Date(shifted.getFullYear(), shifted.getMonth() + 1, 0).getDate();
+  shifted.setDate(Math.min(date.getDate(), lastDay));
+  return toIsoDate(shifted);
+}
+
+export function daysInMonth(iso: IsoDate): number {
+  const date = fromIsoDate(iso);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+/** Weekday index of the 1st, Monday = 0 — matches the Monday-anchored week (§7.6). */
+export function firstWeekdayOfMonth(iso: IsoDate): number {
+  const date = fromIsoDate(startOfMonth(iso));
+  return (date.getDay() + 6) % 7;
+}
+
+export function isFuture(iso: IsoDate, reference: IsoDate = today()): boolean {
+  return iso > reference;
+}
+
+export function isSameMonth(a: IsoDate, b: IsoDate): boolean {
+  return a.slice(0, 7) === b.slice(0, 7);
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "Sept 1" style label for charts and cards. */
 export function formatShort(iso: IsoDate): string {
   const date = fromIsoDate(iso);
   return `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+}
+
+const MONTHS_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** "September 2026" — the calendar header. */
+export function formatMonth(iso: IsoDate): string {
+  const date = fromIsoDate(iso);
+  return `${MONTHS_LONG[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** "Today" / "Yesterday" / "Sep 3" — for a date the user picked. */
+export function formatRelativeDay(iso: IsoDate, reference: IsoDate = today()): string {
+  if (iso === reference) return 'Today';
+  if (iso === addDays(reference, -1)) return 'Yesterday';
+  return formatShort(iso);
 }
 
 export function formatLong(iso: IsoDate): string {

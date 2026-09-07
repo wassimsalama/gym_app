@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -12,12 +14,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { MonthCalendar } from '@/components/MonthCalendar';
 import { ProgressBar } from '@/components/ProgressBar';
 import { WeightChart } from '@/components/WeightChart';
 import { ApiError, getDashboard, putDailyLog, type Dashboard } from '@/lib/api';
-import { formatLong, today } from '@/lib/dates';
+import {
+  formatLong,
+  formatRelativeDay,
+  isSameMonth,
+  startOfMonth,
+  today,
+  type IsoDate,
+} from '@/lib/dates';
 import { useUnit } from '@/lib/profile';
-import { formatDelta, formatWeight, parseWeightInput } from '@/lib/units';
+import { formatDelta, formatWeight, fromKg, parseWeightInput } from '@/lib/units';
 
 export default function Weight() {
   const insets = useSafeAreaInsets();
@@ -25,12 +35,17 @@ export default function Weight() {
   const unit = useUnit();
   const input = useRef<TextInput>(null);
 
+  const [logDate, setLogDate] = useState<IsoDate>(today());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState<IsoDate>(startOfMonth());
+
   const [entry, setEntry] = useState('');
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<IsoDate | null>(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -46,8 +61,8 @@ export default function Weight() {
   }, []);
 
   useEffect(() => {
-    // State is set from the promise callbacks, never synchronously in the
-    // effect body — that would cascade renders on every mount.
+    // State is set from promise callbacks, never synchronously in the effect
+    // body — that would cascade renders on every mount.
     let active = true;
 
     getDashboard()
@@ -63,7 +78,8 @@ export default function Weight() {
         if (active) setLoading(false);
       });
 
-    // Spec §2.4: one number field, pre-focused — save is one tap after typing.
+    // Spec §2.4: the field is pre-focused, so logging today is one tap after
+    // typing. Picking another date is opt-in and never gets in the way.
     const timer = setTimeout(() => input.current?.focus(), 350);
 
     return () => {
@@ -71,6 +87,32 @@ export default function Weight() {
       clearTimeout(timer);
     };
   }, []);
+
+  /** Days already holding a weight — dotted in the calendar so gaps are obvious. */
+  const loggedDates = useMemo(
+    () => new Set((data?.weight.series ?? []).map((p) => p.date)),
+    [data],
+  );
+
+  const existingForDate = useMemo(
+    () => data?.weight.series.find((p) => p.date === logDate)?.raw_kg ?? null,
+    [data, logDate],
+  );
+
+  const pickDate = useCallback(
+    (date: IsoDate) => {
+      setLogDate(date);
+      setCalendarOpen(false);
+      setError(null);
+      setSaved(null);
+      // Prefill with whatever is already recorded, so backfilling a day that
+      // exists is a correction rather than a blind overwrite.
+      const existing = data?.weight.series.find((p) => p.date === date)?.raw_kg ?? null;
+      setEntry(existing === null ? '' : fromKg(existing, unit).toFixed(1));
+      setTimeout(() => input.current?.focus(), 250);
+    },
+    [data, unit],
+  );
 
   const save = useCallback(async () => {
     const kg = parseWeightInput(entry, unit);
@@ -82,18 +124,22 @@ export default function Weight() {
     setSaving(true);
     setError(null);
     try {
-      await putDailyLog(today(), { weight_kg: kg });
+      await putDailyLog(logDate, { weight_kg: kg });
+      setSaved(logDate);
       setEntry('');
+      // Backfilling should land you back on today, ready for tomorrow.
+      setLogDate(today());
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'Could not save');
     } finally {
       setSaving(false);
     }
-  }, [entry, unit, load]);
+  }, [entry, unit, logDate, load]);
 
-  const goal = data?.goal ?? null;
   const weight = data?.weight;
+  const goal = data?.goal ?? null;
+  const isToday = logDate === today();
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -110,7 +156,7 @@ export default function Weight() {
           <RefreshControl refreshing={refreshing} onRefresh={load} tintColor="#8A97A6" />
         }
       >
-        <Card title={`Today's weight (${unit})`}>
+        <Card title={`Log a weight (${unit})`}>
           <View className="flex-row gap-3">
             <TextInput
               ref={input}
@@ -128,7 +174,32 @@ export default function Weight() {
               <Button title="Save" onPress={save} loading={saving} disabled={!entry} />
             </View>
           </View>
+
+          <Pressable
+            className="mt-3 flex-row items-center justify-between rounded-xl border border-line px-4 py-3 active:bg-line"
+            onPress={() => {
+              setVisibleMonth(startOfMonth(logDate));
+              setCalendarOpen(true);
+            }}
+          >
+            <Text className="text-sm text-muted">Date</Text>
+            <Text className="text-sm font-semibold text-white">
+              {formatRelativeDay(logDate)}
+              {!isToday && existingForDate !== null ? '  ·  editing' : ''}
+              {'   ▾'}
+            </Text>
+          </Pressable>
+
+          {!isToday ? (
+            <Text className="mt-2 text-xs text-muted">
+              Backfilling {formatLong(logDate)}. The trend recalculates once it saves.
+            </Text>
+          ) : null}
+
           {error ? <Text className="mt-3 text-sm text-danger">{error}</Text> : null}
+          {saved && !error ? (
+            <Text className="mt-3 text-sm text-accent">Saved {formatRelativeDay(saved)}.</Text>
+          ) : null}
         </Card>
 
         <Card
@@ -174,6 +245,44 @@ export default function Weight() {
           </Card>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={calendarOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCalendarOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end bg-black/60"
+          onPress={() => setCalendarOpen(false)}
+        >
+          <Pressable
+            className="rounded-t-3xl border-t border-line bg-surface px-5 pt-5"
+            style={{ paddingBottom: insets.bottom + 20 }}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View className="mb-4 flex-row items-center justify-between">
+              <Text className="text-lg font-bold text-white">Pick a day</Text>
+              <Pressable onPress={() => pickDate(today())}>
+                <Text className="text-sm font-semibold text-accent">Today</Text>
+              </Pressable>
+            </View>
+
+            <MonthCalendar
+              month={visibleMonth}
+              selected={logDate}
+              marked={loggedDates}
+              onSelect={pickDate}
+              onMonthChange={setVisibleMonth}
+            />
+
+            <Text className="mt-4 text-xs text-muted">
+              A dot marks a day you have already logged.
+              {isSameMonth(visibleMonth, today()) ? ' Future days are not selectable.' : ''}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
