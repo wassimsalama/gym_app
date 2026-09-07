@@ -13,7 +13,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "pyjwt[crypto]>=2.10",
     "certifi>=2024.8.30",
-    "boto3>=1.35",
+    "httpx>=0.28",
     "python-multipart>=0.0.17",
 ]
 
@@ -21,7 +21,6 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
-    "httpx>=0.28",
     "ruff>=0.8",
 ]
 
