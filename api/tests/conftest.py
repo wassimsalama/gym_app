@@ -73,6 +73,17 @@ TEST_DATABASE_URL = urlunparse(urlparse(_dev_url)._replace(path="/gym_test"))
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["SUPABASE_URL"] = SUPABASE_URL
 
+# Pin everything else the app reads, so the suite does not inherit whatever the
+# developer happens to have in api/.env. Environment variables take priority
+# over the dotenv file, which is what makes this work.
+#
+# This is not hypothetical tidiness: once a real storage bucket was configured
+# locally, three tests asserting "storage is absent" started failing — passing
+# or failing by machine rather than by code.
+os.environ["SUPABASE_STORAGE_BUCKET"] = ""
+os.environ["SUPABASE_SERVICE_KEY"] = ""
+os.environ["ALLOWED_ORIGINS"] = ""
+
 import uuid  # noqa: E402
 from collections.abc import Generator  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
