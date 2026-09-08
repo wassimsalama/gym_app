@@ -54,9 +54,26 @@ if (lan.length > 0) {
 
 const api = source.match(PRODUCTION_API)?.[0];
 if (!api) {
+  // Report what the build actually saw. On a hosted builder the usual cause is
+  // that the variables were set as *runtime* variables rather than *build*
+  // ones, and the difference is invisible from the error alone.
+  const seen = Object.keys(process.env)
+    .filter((k) => k.startsWith('EXPO_PUBLIC_'))
+    .sort();
+
+  const inventory = ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY']
+    .map((k) => `    ${k}  ${process.env[k] ? 'set' : 'NOT SET'}`)
+    .join('\n');
+
   fail(
-    'no production API URL found in the bundle.\n' +
-      '  EXPO_PUBLIC_API_URL is probably unset, so every request would fail.',
+    'no production API URL in the bundle — every request would fail.\n\n' +
+      `  Environment during this build:\n${inventory}\n` +
+      (seen.length === 0
+        ? '\n  No EXPO_PUBLIC_* variables were visible at all. On Cloudflare these\n' +
+          '  must be set as BUILD variables (Settings -> Build), not runtime\n' +
+          '  variables — Expo inlines them while bundling, long before the Worker\n' +
+          '  ever runs.\n'
+        : '\n  Locally, set them in app/.env.production.\n'),
   );
 }
 
