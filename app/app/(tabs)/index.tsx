@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -12,7 +12,7 @@ import { SuggestionCard } from '@/components/SuggestionCard';
 import { SyncBadge } from '@/components/SyncBadge';
 import { VolumeRings } from '@/components/VolumeRings';
 import { WeightChart } from '@/components/WeightChart';
-import { getDashboard, type Dashboard } from '@/lib/api';
+import { getDashboard, putDailyLog, type Dashboard } from '@/lib/api';
 import { describeError, type DisplayError } from '@/lib/errors';
 import { useAuth } from '@/lib/auth';
 import { formatLong, today } from '@/lib/dates';
@@ -30,6 +30,29 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<DisplayError | null>(null);
+  const [stepsEntry, setStepsEntry] = useState('');
+  const [savingSteps, setSavingSteps] = useState(false);
+  const [stepsError, setStepsError] = useState<string | null>(null);
+
+  async function saveSteps() {
+    const parsed = Number.parseInt(stepsEntry.replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setStepsError('Enter a step count');
+      return;
+    }
+
+    setSavingSteps(true);
+    setStepsError(null);
+    try {
+      await putDailyLog(today(), { steps: parsed });
+      setStepsEntry('');
+      await load();
+    } catch {
+      setStepsError('Could not save that. It will sync when you are back online.');
+    } finally {
+      setSavingSteps(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -191,6 +214,47 @@ export default function DashboardScreen() {
                 )}
               </Card>
             ) : null}
+
+            <Card
+              title="Steps"
+              footnote="Days you don't log are left out of the average, not counted as zero."
+            >
+              <View className="flex-row items-end gap-3">
+                <TextInput
+                  className="h-14 min-w-0 flex-1 rounded-2xl border border-line bg-ink px-4 text-2xl font-bold text-white"
+                  placeholder={data?.steps.today != null ? String(data.steps.today) : '—'}
+                  placeholderTextColor="#3A4552"
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  value={stepsEntry}
+                  onChangeText={setStepsEntry}
+                  onSubmitEditing={saveSteps}
+                  selectTextOnFocus
+                />
+                <View className="w-24 shrink-0">
+                  <Button
+                    title="Save"
+                    onPress={saveSteps}
+                    loading={savingSteps}
+                    disabled={!stepsEntry}
+                  />
+                </View>
+              </View>
+
+              {stepsError ? (
+                <Text className="mt-3 text-sm text-danger">{stepsError}</Text>
+              ) : data?.steps.average != null ? (
+                <Text className="mt-3 text-sm text-muted">
+                  {data.steps.average.toLocaleString()} a day on average over{' '}
+                  {data.steps.days_logged} logged {data.steps.days_logged === 1 ? 'day' : 'days'}
+                  {data.steps.reliable ? '' : ' — too few days to read much into yet'}.
+                </Text>
+              ) : (
+                <Text className="mt-3 text-sm text-muted">
+                  Log a few days and an average appears here.
+                </Text>
+              )}
+            </Card>
 
             <Card
               title="Maintenance"

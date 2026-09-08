@@ -38,6 +38,8 @@ class LogRow:
     weight_kg: float | None
     calories: int | None
     trained: bool | None
+    #: None means the day was never logged, which is not zero (migration 0004).
+    steps: int | None
 
 
 @dataclass(frozen=True)
@@ -169,9 +171,16 @@ def load(
             weight_kg=float(row.weight_kg) if row.weight_kg is not None else None,
             calories=row.calories,
             trained=row.trained,
+            steps=row.steps,
         )
         for row in db.execute(
-            select(DailyLog.log_date, DailyLog.weight_kg, DailyLog.calories, DailyLog.trained)
+            select(
+                DailyLog.log_date,
+                DailyLog.weight_kg,
+                DailyLog.calories,
+                DailyLog.trained,
+                DailyLog.steps,
+            )
             .where(
                 DailyLog.user_id == user_id,
                 DailyLog.log_date >= log_window,

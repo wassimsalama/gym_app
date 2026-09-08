@@ -13,6 +13,7 @@ from app.schemas.dashboard import (
     Dashboard,
     GoalBlock,
     Recap,
+    StepsBlock,
     Streaks,
     Suggestion,
     TdeeBlock,
@@ -20,7 +21,7 @@ from app.schemas.dashboard import (
     WeightBlock,
     WeightSeriesPoint,
 )
-from app.services import plateaus, projection, recap, streaks, suggestions, tdee
+from app.services import plateaus, projection, recap, steps, streaks, suggestions, tdee
 from app.services.smoothing import smooth_series
 
 router = APIRouter(tags=["dashboard"])
@@ -82,6 +83,18 @@ def get_dashboard(
     )
 
     # --- goal --------------------------------------------------------------
+    # Steps over the trailing week. Days with no count are skipped rather than
+    # read as zero — see services/steps.py for why that distinction matters here.
+    step_window = [
+        row.steps
+        for row in loaded.logs
+        if (today - row.log_date).days < steps.WINDOW_DAYS and row.log_date <= today
+    ]
+    step_summary = steps.summarise(
+        step_window,
+        today_value=next((row.steps for row in loaded.logs if row.log_date == today), None),
+    )
+
     goal_block = None
     if goal is not None:
         evaluated = projection.evaluate(
@@ -167,6 +180,12 @@ def get_dashboard(
             estimate_kcal=estimate.estimate_kcal,
             days_of_data=estimate.days_of_data,
             reliable=estimate.reliable,
+        ),
+        steps=StepsBlock(
+            today=step_summary.today,
+            average=step_summary.average,
+            days_logged=step_summary.days_logged,
+            reliable=step_summary.reliable,
         ),
         volume=[
             VolumeRing(

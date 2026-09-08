@@ -167,3 +167,70 @@ def test_users_cannot_see_each_others_logs(
     other = {"Authorization": f"Bearer {make_token()}"}
     listed = client.get("/daily-logs", params={"from": DATE, "to": DATE}, headers=other).json()
     assert listed == []
+
+
+# --- steps ------------------------------------------------------------------
+
+
+def test_steps_round_trip(client: TestClient, auth_headers: dict[str, str]) -> None:
+    resp = client.put("/daily-logs/2026-09-07", json={"steps": 8412}, headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["steps"] == 8412
+
+
+def test_an_unlogged_day_reports_null_steps_not_zero(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """The distinction the whole feature rests on.
+
+    A day with no step count is a day we know nothing about, not a day someone
+    did not move. Reporting 0 would drag every average down and feed a false
+    observation into the suggestions engine.
+    """
+    client.put("/daily-logs/2026-09-07", json={"weight_kg": 80}, headers=auth_headers)
+
+    row = client.get(
+        "/daily-logs", params={"from": "2026-09-07", "to": "2026-09-07"}, headers=auth_headers
+    ).json()[0]
+
+    assert row["steps"] is None
+
+
+def test_zero_steps_is_storable_and_distinct_from_null(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """Someone bedbound for a day can log 0, and it must not read as 'unknown'."""
+    client.put("/daily-logs/2026-09-07", json={"steps": 0}, headers=auth_headers)
+
+    row = client.get(
+        "/daily-logs", params={"from": "2026-09-07", "to": "2026-09-07"}, headers=auth_headers
+    ).json()[0]
+
+    assert row["steps"] == 0
+    assert row["steps"] is not None
+
+
+def test_logging_steps_does_not_clear_the_rest_of_the_day(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    client.put(
+        "/daily-logs/2026-09-07", json={"weight_kg": 80, "calories": 2100}, headers=auth_headers
+    )
+    client.put("/daily-logs/2026-09-07", json={"steps": 9000}, headers=auth_headers)
+
+    row = client.get(
+        "/daily-logs", params={"from": "2026-09-07", "to": "2026-09-07"}, headers=auth_headers
+    ).json()[0]
+
+    assert row["steps"] == 9000
+    assert row["calories"] == 2100
+    assert Decimal(row["weight_kg"]) == Decimal("80.00")
+
+
+def test_impossible_step_counts_are_refused(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    for bad in (-1, 200_001):
+        resp = client.put("/daily-logs/2026-09-07", json={"steps": bad}, headers=auth_headers)
+        assert resp.status_code == 422, bad
