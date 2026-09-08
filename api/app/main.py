@@ -37,7 +37,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
     allow_origin_regex=settings.dev_origin_regex,
-    allow_credentials=True,
+    # False, deliberately. Every request authenticates with an Authorization
+    # header, never a cookie, so credentialed CORS buys nothing — and it is the
+    # setting that turns a future mistake in the origin list into a real hole.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     # So the client can honour rate limiting rather than guessing at it.
