@@ -218,9 +218,17 @@ export default function Weight() {
       >
         <Card title={`Log a weight (${unit})`}>
           <View className="flex-row gap-3">
+            {/*
+              `min-w-0` is load-bearing on the web. React Native Web renders
+              this as an <input>, which carries an intrinsic width from its
+              default character size — inflated further by text-3xl. A flex
+              child will not shrink below its intrinsic width while min-width
+              is auto, so on a phone-width screen the field kept its full size
+              and pushed Save off the right edge.
+            */}
             <TextInput
               ref={input}
-              className="h-16 flex-1 rounded-2xl border border-line bg-ink px-4 text-3xl font-bold text-white"
+              className="h-16 min-w-0 flex-1 rounded-2xl border border-line bg-ink px-4 text-3xl font-bold text-white"
               placeholder="—"
               placeholderTextColor="#3A4552"
               keyboardType="decimal-pad"
@@ -230,7 +238,7 @@ export default function Weight() {
               onSubmitEditing={save}
               selectTextOnFocus
             />
-            <View className="w-28 justify-center">
+            <View className="w-28 shrink-0 justify-center">
               <Button title="Save" onPress={save} loading={saving} disabled={!entry} />
             </View>
           </View>
