@@ -25,9 +25,15 @@ export default function RootLayout() {
     // The .ttf is required explicitly rather than passing `Ionicons.font`.
     // That map is populated by the icon set's own module initialisation, and
     // on this build it arrived empty — useFonts then resolved instantly having
-    // registered nothing, which looks identical to success. Requiring the file
-    // makes Metro resolve and hash it, so there is nothing left to be empty.
-    Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+    // registered nothing, which looks identical to success.
+    //
+    // It is also a *vendored copy*, not the one inside node_modules. Metro
+    // mirrors an asset's source path into the output, so requiring it from the
+    // package put the font at assets/node_modules/@expo/... — and wrangler
+    // skips every path containing node_modules when it uploads. The file built
+    // fine, passed every local check, and simply was not there in production:
+    // Safari asked for it, got the SPA fallback's HTML, and refused to use it.
+    Ionicons: require('../assets/fonts/Ionicons.ttf'),
   });
 
   useEffect(() => {
