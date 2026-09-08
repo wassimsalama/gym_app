@@ -16,6 +16,31 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-08 — The goal's starting weight is editable (deviation from §7.1)
+
+§7.1 fixes `start_weight_kg` at goal creation, and `GoalUpdate` refused it, so
+that adjusting a target could not silently reset progress to zero. That
+reasoning is sound for targets and was kept.
+
+It does not survive a typo. If the baseline was wrong — entered in the wrong
+unit, or simply mistyped — the only remedy was `POST /goals`, which throws away
+the goal and its history to correct a number that was never right. The user
+asked for this directly; options were put to them (allow editing, keep it
+immutable and surface the restart path better, or allow it only within the
+first N days) and they chose to allow it.
+
+`start_date` stays immutable. Moving it changes which observations count toward
+the trend, which is genuinely re-baselining, and re-baselining remains an
+explicit new goal.
+
+Progress and the projection are derived at read time from the baseline and the
+target, so correcting one recalculates both with no migration and no stored
+value to go stale — which is also why this was safe to change.
+
+One existing test asserted the old rule and was updated rather than deleted:
+what it was really protecting is that unknown fields cannot be smuggled onto a
+goal, so it now checks `start_date` and `user_id` are still refused.
+
 ## 2026-09-08 — `app/.env.production` is committed, on purpose
 
 Cloudflare's hosted build kept failing because it was not passing build-time
