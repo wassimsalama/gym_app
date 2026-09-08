@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lockedFor, setLockedFor] = useState(0);
+  const { notice } = useLocalSearchParams<{ notice?: string }>();
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [resent, setResent] = useState(false);
 
@@ -120,6 +121,15 @@ export default function SignIn() {
         <Link href="/forgot-password" asChild>
           <Text className="-mt-1 text-right text-sm text-muted">Forgotten your password?</Text>
         </Link>
+
+        {notice === 'account-deleted' ? (
+          <View className="rounded-2xl border border-line bg-surface p-4">
+            <Text className="text-sm text-white">
+              Your account and its data have been removed. Deleting the sign-in itself is handled by
+              Supabase and may take a moment to disappear everywhere.
+            </Text>
+          </View>
+        ) : null}
 
         {error ? <Text className="text-sm text-danger">{error}</Text> : null}
 

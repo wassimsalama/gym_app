@@ -3,7 +3,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { deletePhoto, getPhotos, type Photo } from '@/lib/api';
 import {
   addMonths,
@@ -138,27 +138,28 @@ export default function Photos() {
     [month, load],
   );
 
-  const confirmDelete = useCallback(
-    (photo: Photo) => {
-      Alert.alert('Delete this photo?', 'It is removed from your account permanently.', [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setViewing(null);
-            try {
-              await deletePhoto(photo.id);
-              await load(month);
-            } catch (err) {
-              setError(describeError(err, 'Could not delete that photo'));
-            }
-          },
-        },
-      ]);
-    },
-    [month, load],
-  );
+  const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = useCallback((photo: Photo) => setPendingDelete(photo), []);
+
+  const runDelete = useCallback(async () => {
+    const photo = pendingDelete;
+    if (!photo) return;
+
+    setDeleting(true);
+    try {
+      await deletePhoto(photo.id);
+      setPendingDelete(null);
+      setViewing(null);
+      await load(month);
+    } catch (err) {
+      setPendingDelete(null);
+      setError(describeError(err, 'Could not delete that photo'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [pendingDelete, month, load]);
 
   function pickForComparison(photo: Photo) {
     setComparison(([first]) => (first === null ? [photo, null] : [first, photo]));
@@ -349,6 +350,23 @@ export default function Photos() {
           ) : null}
         </View>
       </Modal>
+
+      {/*
+        Outside the viewer Modal on purpose. Nesting one Modal inside another is
+        unreliable across platforms, and this has to appear whether the photo was
+        opened full-screen or deleted from the grid.
+      */}
+      <ConfirmDialog
+        visible={pendingDelete !== null}
+        title="Delete this photo?"
+        message="It is removed from your account permanently."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        busy={deleting}
+        onConfirm={() => void runDelete()}
+        onCancel={() => setPendingDelete(null)}
+      />
     </View>
   );
 }
