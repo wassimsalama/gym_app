@@ -227,6 +227,46 @@ export const saveSession = (body: {
   sets: SetInput[];
 }) => enqueue<SessionSaved>('POST', '/workout-sessions', body);
 
+/** Activities the cardio form offers. `other` keeps the list from blocking a log. */
+export const CARDIO_ACTIVITIES = [
+  'run',
+  'walk',
+  'cycle',
+  'swim',
+  'row',
+  'elliptical',
+  'stairs',
+  'hike',
+  'class',
+  'other',
+] as const;
+
+export type CardioActivity = (typeof CARDIO_ACTIVITIES)[number];
+
+export type CardioSession = {
+  id: number;
+  client_uuid: string;
+  session_date: IsoDate;
+  activity: CardioActivity;
+  duration_min: number;
+  /** null means the activity does not measure distance — not that it was zero. */
+  distance_km: number | null;
+  notes: string | null;
+};
+
+/** Queued, same as a workout: `client_uuid` is the server's dedupe key. */
+export const saveCardio = (body: {
+  client_uuid: string;
+  session_date: IsoDate;
+  activity: CardioActivity;
+  duration_min: number;
+  distance_km?: number | null;
+  notes?: string | null;
+}) => enqueue<CardioSession>('POST', '/cardio-sessions', body);
+
+export const getCardio = (from: IsoDate, to: IsoDate) =>
+  api.get<CardioSession[]>(`/cardio-sessions?from=${from}&to=${to}`);
+
 /** Opens a new goal, closing any active one and re-baselining on the latest weight. */
 export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null) =>
   api.post<Goal>('/goals', { goal_weight_kg, ...(target_date ? { target_date } : {}) });

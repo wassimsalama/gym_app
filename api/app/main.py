@@ -6,6 +6,7 @@ from app.core.limits import limit_by_address
 from app.routers import (
     account,
     admin,
+    cardio_sessions,
     daily_logs,
     dashboard,
     exercises,
@@ -62,6 +63,7 @@ app.include_router(goals.router)
 app.include_router(dashboard.router)
 app.include_router(exercises.router)
 app.include_router(workout_sessions.router)
+app.include_router(cardio_sessions.router)
 app.include_router(photos.router)
 app.include_router(account.router)
 app.include_router(admin.router)

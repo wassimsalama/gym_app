@@ -1,19 +1,22 @@
 import * as Crypto from 'expo-crypto';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Card } from '@/components/Card';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ExerciseSearch } from '@/components/ExerciseSearch';
 import { Stepper } from '@/components/Stepper';
 import { SyncBadge } from '@/components/SyncBadge';
 import {
   ApiError,
+  CARDIO_ACTIVITIES,
   getLastSets,
   putDailyLog,
+  saveCardio,
   saveSession,
+  type CardioActivity,
   type Exercise,
   type PersonalRecord,
   type SetInput,
@@ -222,6 +225,49 @@ export default function Workout() {
     }
   }, []);
 
+  const [cardioActivity, setCardioActivity] = useState<CardioActivity>('run');
+  const [cardioMinutes, setCardioMinutes] = useState('');
+  const [cardioDistance, setCardioDistance] = useState('');
+  const [savingCardio, setSavingCardio] = useState(false);
+  const [cardioSaved, setCardioSaved] = useState(false);
+  const [cardioError, setCardioError] = useState<string | null>(null);
+
+  async function saveCardioSession() {
+    const minutes = Number.parseInt(cardioMinutes.replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(minutes) || minutes < 1) {
+      setCardioError('How many minutes?');
+      return;
+    }
+
+    // Blank means the activity does not measure distance. Sending 0 would be a
+    // claim we cannot make, so it stays absent.
+    const trimmed = cardioDistance.trim();
+    const distance = trimmed === '' ? null : Number.parseFloat(trimmed);
+    if (distance !== null && !Number.isFinite(distance)) {
+      setCardioError('That distance is not a number');
+      return;
+    }
+
+    setSavingCardio(true);
+    setCardioError(null);
+    try {
+      await saveCardio({
+        client_uuid: Crypto.randomUUID(),
+        session_date: today(),
+        activity: cardioActivity,
+        duration_min: minutes,
+        distance_km: distance,
+      });
+      setCardioMinutes('');
+      setCardioDistance('');
+      setCardioSaved(true);
+    } catch {
+      setCardioError('Could not save that. It will sync when you are back online.');
+    } finally {
+      setSavingCardio(false);
+    }
+  }
+
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   function confirmDiscard() {
@@ -293,6 +339,81 @@ export default function Workout() {
                     <Text className="text-sm font-semibold capitalize text-white">{option}</Text>
                   </Pressable>
                 ))}
+              </View>
+            </Card>
+
+            <Card title="Cardio" footnote="Logged against today. Distance is optional.">
+              <View className="flex-row flex-wrap gap-2">
+                {CARDIO_ACTIVITIES.map((option) => (
+                  <Pressable
+                    key={option}
+                    className={`rounded-full border px-4 py-2.5 active:bg-surface ${
+                      option === cardioActivity ? 'border-accent' : 'border-line'
+                    }`}
+                    onPress={() => {
+                      setCardioActivity(option);
+                      setCardioSaved(false);
+                    }}
+                  >
+                    <Text
+                      className={`text-sm font-semibold capitalize ${
+                        option === cardioActivity ? 'text-accent' : 'text-muted'
+                      }`}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View className="mt-4 flex-row gap-3">
+                <View className="min-w-0 flex-1">
+                  <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                    Minutes
+                  </Text>
+                  <TextInput
+                    className="h-14 min-w-0 rounded-2xl border border-line bg-ink px-4 text-2xl font-bold text-white"
+                    placeholder="—"
+                    placeholderTextColor="#3A4552"
+                    keyboardType="number-pad"
+                    value={cardioMinutes}
+                    onChangeText={(text) => {
+                      setCardioMinutes(text);
+                      setCardioSaved(false);
+                    }}
+                  />
+                </View>
+                <View className="min-w-0 flex-1">
+                  <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                    Distance (km)
+                  </Text>
+                  <TextInput
+                    className="h-14 min-w-0 rounded-2xl border border-line bg-ink px-4 text-2xl font-bold text-white"
+                    placeholder="—"
+                    placeholderTextColor="#3A4552"
+                    keyboardType="decimal-pad"
+                    value={cardioDistance}
+                    onChangeText={(text) => {
+                      setCardioDistance(text);
+                      setCardioSaved(false);
+                    }}
+                  />
+                </View>
+              </View>
+
+              {cardioError ? (
+                <Text className="mt-3 text-sm text-danger">{cardioError}</Text>
+              ) : cardioSaved ? (
+                <Text className="mt-3 text-sm text-accent">Saved.</Text>
+              ) : null}
+
+              <View className="mt-4">
+                <Button
+                  title="Log cardio"
+                  onPress={saveCardioSession}
+                  loading={savingCardio}
+                  disabled={!cardioMinutes}
+                />
               </View>
             </Card>
 
