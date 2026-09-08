@@ -8,6 +8,7 @@
 import { api, ApiError, request } from '@/lib/http';
 import type { IsoDate } from '@/lib/dates';
 import { enqueue } from '@/lib/sync';
+import type { Unit } from '@/lib/units';
 
 export { ApiError, API_URL } from '@/lib/http';
 
@@ -105,6 +106,16 @@ export type Dashboard = {
 
 export const health = () => request<Health>('/health', { anonymous: true });
 export const healthAuth = () => api.get<AuthHealth>('/health-auth');
+
+/**
+ * Change the display unit.
+ *
+ * Deliberately not routed through the offline queue. The queue exists so a
+ * logged set or weight survives a dead connection; a preference is worth
+ * nothing if it syncs an hour later, and queueing it would let two devices
+ * replay conflicting values long after the fact.
+ */
+export const updateUnit = (unit: Unit) => api.patch<AuthHealth>('/me', { unit });
 
 /**
  * Writes below go through the offline queue (§8): durably stored, applied

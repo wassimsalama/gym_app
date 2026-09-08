@@ -11,6 +11,7 @@ from app.routers import (
     exercises,
     goals,
     health,
+    me,
     photos,
     workout_sessions,
 )
@@ -55,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(me.router)
 app.include_router(daily_logs.router)
 app.include_router(goals.router)
 app.include_router(dashboard.router)

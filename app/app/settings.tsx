@@ -14,16 +14,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import { PasswordInput } from '@/components/PasswordInput';
 import { deleteAccount } from '@/lib/api';
 import { signOut, supabase, updatePassword, useAuth } from '@/lib/auth';
+import { setUnit, useUnit } from '@/lib/profile';
+import type { Unit } from '@/lib/units';
 import { clearCache } from '@/lib/cache';
 import { describeError, type DisplayError } from '@/lib/errors';
 import { clearQueue } from '@/lib/sync';
 
 const CONFIRMATION = 'DELETE';
 
+const UNIT_OPTIONS = [
+  { value: 'lb' as const, label: 'Pounds (lb)' },
+  { value: 'kg' as const, label: 'Kilograms (kg)' },
+];
+
 export default function Settings() {
+  const unit = useUnit();
+  const [unitError, setUnitError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useAuth();
@@ -114,6 +124,23 @@ export default function Settings() {
           <View className="mt-4">
             <Button title="Sign out" variant="ghost" onPress={() => void signOut()} />
           </View>
+        </Card>
+
+        <Card
+          title="Units"
+          footnote="Only changes what you see. Everything is stored in kilograms."
+        >
+          <SegmentedControl<Unit>
+            options={UNIT_OPTIONS}
+            value={unit}
+            onChange={(next) => {
+              setUnitError(null);
+              void setUnit(next).catch(() =>
+                setUnitError('Could not save that. Check your connection and try again.'),
+              );
+            }}
+          />
+          {unitError ? <Text className="mt-3 text-sm text-danger">{unitError}</Text> : null}
         </Card>
 
         <Card title="Password">
