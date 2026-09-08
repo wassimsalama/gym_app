@@ -19,8 +19,11 @@ web-build/
 .env
 .env.*
 .env.local
-.env.production
+# Negations must come last — gitignore takes the final matching rule.
 !.env.example
+# Publishable client config, committed on purpose. Every value in it is
+# EXPO_PUBLIC_* and already inlined into the bundle every visitor downloads.
+!.env.production
 
 # VS Code Local History snapshots every edit, including .env files, under
 # timestamped names that the patterns above do not match. Never commit these.
