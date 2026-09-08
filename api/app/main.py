@@ -21,6 +21,13 @@ app = FastAPI(
     # Applied to every route, signed in or not — the only defence that works
     # before a caller has identified itself.
     dependencies=[Depends(limit_by_address)],
+    # Swagger and the schema are development tools. Every route requires a
+    # token, so publishing them leaks no data — but it hands over the complete
+    # surface, parameter names and bounds for free, and nothing here needs them:
+    # the API is exercised by 354 tests, not by clicking through /docs.
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
     title="Gym App API",
     version="0.1.0",
     description=(
