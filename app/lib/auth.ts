@@ -105,17 +105,48 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signUp(email: string, password: string) {
-  return supabase.auth.signUp({ email: email.trim(), password });
+  return supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    // Without this the confirmation link goes to whatever Supabase's Site URL
+    // happens to be. That is a single global value, so it is wrong for anyone
+    // signing up from a different origin, and it was pointing at
+    // http://localhost:3000 for the first weeks this was live — every account
+    // created then got a confirmation link that led nowhere, and those users
+    // cannot sign in at all, because an unconfirmed email is rejected.
+    options: { emailRedirectTo: appUrl('/') },
+  });
+}
+
+/**
+ * Send the confirmation email again.
+ *
+ * Needed because an unconfirmed account is invisible from the outside: sign-in
+ * fails with "Email not confirmed" and, with only a "Forgotten your password?"
+ * link on screen, resetting the password looks like the fix. It is not — a
+ * reset does not confirm the address, so the next sign-in fails the same way.
+ */
+export async function resendConfirmation(email: string) {
+  return supabase.auth.resend({
+    type: 'signup',
+    email: email.trim(),
+    options: { emailRedirectTo: appUrl('/') },
+  });
 }
 
 export async function signOut() {
   return supabase.auth.signOut();
 }
 
-/** Where the reset link should land. Must be listed in Supabase's redirect allow-list. */
-function resetRedirectUrl(): string | undefined {
+/**
+ * Where an emailed link should land. Must be listed in Supabase's redirect
+ * allow-list, and built from the origin actually being used rather than a
+ * hardcoded host — the site answers on more than one.
+ */
+function appUrl(path: string): string | undefined {
   if (Platform.OS !== 'web') return process.env.EXPO_PUBLIC_RESET_URL;
-  return `${globalThis.location?.origin ?? ''}/reset-password`;
+  const origin = globalThis.location?.origin;
+  return origin ? `${origin}${path}` : undefined;
 }
 
 /**
@@ -125,7 +156,7 @@ function resetRedirectUrl(): string | undefined {
  */
 export async function requestPasswordReset(email: string) {
   return supabase.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: resetRedirectUrl(),
+    redirectTo: appUrl('/reset-password'),
   });
 }
 
