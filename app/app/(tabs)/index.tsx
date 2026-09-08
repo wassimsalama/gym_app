@@ -219,12 +219,6 @@ export default function DashboardScreen() {
             </Card>
 
             {data?.recap ? <RecapCard recap={data.recap} unit={unit} /> : null}
-
-            <Card title="What lands next" footnote="Roadmap §12.">
-              <Text className="text-sm text-muted">
-                Phase 4 — photos, the suggestions engine, weekly recap, TestFlight.
-              </Text>
-            </Card>
           </>
         )}
 
