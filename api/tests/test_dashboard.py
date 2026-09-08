@@ -5,6 +5,7 @@ UTC, and streaks, Monday-anchored volume and the recap all need a calendar day.
 """
 
 import uuid
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -327,3 +328,50 @@ def test_the_step_average_ignores_days_with_no_count(
     assert body["steps"]["average"] == 10_000
     assert body["steps"]["days_logged"] == 2
     assert body["steps"]["today"] == 10_000
+
+
+def test_a_dangerous_deficit_reaches_the_user(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """End to end: the service returning a message proves nothing on its own.
+
+    Roughly the case the feature was asked for — a heavy person eating 1500 kcal
+    and dropping fast, so the maintenance measured from their own data lands far
+    above what they are eating.
+    """
+    start = date.fromisoformat(TODAY) - timedelta(days=20)
+    for offset in range(21):
+        day = start + timedelta(days=offset)
+        client.put(
+            f"/daily-logs/{day.isoformat()}",
+            json={"weight_kg": round(136.0 - offset * 0.2, 2), "calories": 1500},
+            headers=auth_headers,
+        )
+
+    body = dashboard(client, auth_headers)
+    kinds = [s["kind"] for s in body["suggestions"]]
+
+    assert "low_intake" in kinds, body["suggestions"]
+
+    message = next(s for s in body["suggestions"] if s["kind"] == "low_intake")
+    assert kinds[0] == "low_intake", "it must outrank the others"
+    assert "1,500 kcal" in message["message"]
+    assert "doctor or dietitian" in message["message"]
+
+
+def test_eating_normally_produces_no_health_message(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """The other half: it must stay quiet for an ordinary cut."""
+    start = date.fromisoformat(TODAY) - timedelta(days=20)
+    for offset in range(21):
+        day = start + timedelta(days=offset)
+        client.put(
+            f"/daily-logs/{day.isoformat()}",
+            json={"weight_kg": round(90.0 - offset * 0.05, 2), "calories": 2400},
+            headers=auth_headers,
+        )
+
+    body = dashboard(client, auth_headers)
+
+    assert "low_intake" not in [s["kind"] for s in body["suggestions"]]

@@ -19,13 +19,32 @@ from app.services.streaks import VolumeRing
 from app.services.tdee import TdeeEstimate
 
 #: Highest priority first (spec §7.5).
-PRIORITY = ("plateau", "tdee_update", "volume_gap", "goal_projection", "logging_nudge")
+#: `low_intake` outranks everything. It is the only message here about
+#: something that could harm someone rather than slow their progress.
+PRIORITY = (
+    "low_intake",
+    "plateau",
+    "tdee_update",
+    "volume_gap",
+    "goal_projection",
+    "logging_nudge",
+)
 
 MAX_SUGGESTIONS = 3
 
 #: A ring this far short of target is worth mentioning; nearer than this is
 #: within the noise of one missed session.
 VOLUME_GAP_FRACTION = 0.6
+
+#: Intake below this share of measured maintenance is worth saying out loud.
+#: 0.6 puts the user's own example — 1500 kcal against a measured 3000 — well
+#: inside it, while leaving an ordinary 20-25% cut alone.
+LOW_INTAKE_FRACTION = 0.6
+
+#: Days of intake the average is taken over, and how many of them must actually
+#: be logged. Two light days in a row are not a pattern; ten out of fourteen is.
+LOW_INTAKE_WINDOW_DAYS = 14
+LOW_INTAKE_MIN_LOGGED_DAYS = 10
 
 #: Below this many logged days in the fortnight, the numbers stop meaning much
 #: and the useful advice is simply to log more.
@@ -184,6 +203,58 @@ def from_logging(*, logged_14: int, window_days: int = 14) -> list[Suggestion]:
                 f"calories are what the maintenance estimate and the trend are built from."
             ),
             evidence={"logged_days": logged_14, "window_days": window_days},
+        )
+    ]
+
+
+def from_low_intake(estimate: TdeeEstimate, calorie_days: list[int | None]) -> list[Suggestion]:
+    """Say something when intake sits far under measured maintenance.
+
+    Deliberately compared against the maintenance this app *measures* from the
+    user's own weight and intake, never a formula. If that estimate is not yet
+    reliable the message does not fire at all — telling someone their eating is
+    dangerous on the strength of a population equation would be worse than
+    saying nothing.
+
+    The wording is an observation with its numbers shown, and points at a
+    professional rather than instructing anyone to eat differently. This is the
+    only message in the engine about something that could harm a person, and it
+    is not the app's place to clear anyone medically. Approved wording — do not
+    reword without asking; see DECISIONS.md.
+
+    Unlogged days are skipped rather than read as zero, the same rule as steps:
+    a day nobody recorded is not a day nobody ate.
+    """
+    if not estimate.reliable or estimate.estimate_kcal is None:
+        return []
+
+    logged = [c for c in calorie_days[-LOW_INTAKE_WINDOW_DAYS:] if c is not None]
+    if len(logged) < LOW_INTAKE_MIN_LOGGED_DAYS:
+        return []
+
+    mean_calories = sum(logged) / len(logged)
+    if mean_calories >= estimate.estimate_kcal * LOW_INTAKE_FRACTION:
+        return []
+
+    pct = round(mean_calories / estimate.estimate_kcal * 100)
+
+    return [
+        Suggestion(
+            id="low-intake",
+            kind="low_intake",
+            message=(
+                f"You've averaged {round(mean_calories):,} kcal a day over the last "
+                f"{len(logged)} days — about {pct}% of the {estimate.estimate_kcal:,} kcal "
+                f"maintenance measured from your own weight and intake. That's a large gap "
+                f"to hold for long. If it's deliberate, a doctor or dietitian is the right "
+                f"person to check it with."
+            ),
+            evidence={
+                "mean_calories": round(mean_calories),
+                "tdee_estimate": estimate.estimate_kcal,
+                "pct_of_maintenance": pct,
+                "days_logged": len(logged),
+            },
         )
     ]
 

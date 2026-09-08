@@ -150,6 +150,15 @@ def get_dashboard(
                 recovery=_recovery(loaded, today),
             )
         ),
+        suggestions.from_low_intake(
+            estimate,
+            [
+                row.calories
+                for row in loaded.logs
+                if (today - row.log_date).days < suggestions.LOW_INTAKE_WINDOW_DAYS
+                and row.log_date <= today
+            ],
+        ),
         suggestions.from_tdee(estimate, mean_calories),
         suggestions.from_volume(rings, trained_this_week=bool(sets_by_group)),
         suggestions.from_goal(

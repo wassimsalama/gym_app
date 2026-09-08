@@ -16,6 +16,41 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-08 — A low-intake observation, and its exact wording
+
+The user asked for a message when someone eats far too little for their body —
+their example was 300lb on 1500 kcal from day one. This is the only thing the
+suggestions engine says that is about harm rather than progress, so the wording
+was agreed before it shipped rather than after.
+
+**Rule.** A 14-day mean intake, requiring at least 10 logged days, below 60% of
+the maintenance the app has *measured from the user's own weight and intake*.
+It does not fire while that estimate is unreliable. The alternative would be
+comparing intake against a formula-derived maintenance, which this app
+deliberately never does — telling somebody their eating is dangerous on the
+strength of a population equation is worse than saying nothing.
+
+**Wording, approved by the user:**
+
+> You've averaged 1,500 kcal a day over the last 14 days — about 50% of the
+> 3,000 kcal maintenance measured from your own weight and intake. That's a
+> large gap to hold for long. If it's deliberate, a doctor or dietitian is the
+> right person to check it with.
+
+It states an observation with its numbers visible, does not instruct anyone to
+eat differently, and does not imply the app has cleared anything medically. It
+names a professional because that is the only safe referral available. A test
+asserts the absence of instructing phrases, so a later edit that turns it into
+advice fails the suite rather than shipping quietly.
+
+Unlogged days are skipped rather than read as zero, the same rule as steps in
+migration 0004: ten logged days at 2400 average 2400 and stay quiet, where
+counting four blanks as zero would drag the mean to 1714 and fire a health
+warning at somebody eating normally. That case has its own test.
+
+It outranks every other suggestion. Everything else in the engine is about
+going faster; this one is not.
+
 ## 2026-09-08 — The goal's starting weight is editable (deviation from §7.1)
 
 §7.1 fixes `start_weight_kg` at goal creation, and `GoalUpdate` refused it, so

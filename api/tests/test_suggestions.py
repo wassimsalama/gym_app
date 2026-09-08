@@ -12,6 +12,7 @@ from app.services.suggestions import (
     assemble,
     from_goal,
     from_logging,
+    from_low_intake,
     from_plateaus,
     from_tdee,
     from_volume,
@@ -230,3 +231,77 @@ def test_suggestion_is_immutable() -> None:
     except AttributeError:
         return
     raise AssertionError("Suggestion should be frozen")
+
+
+# --- low intake -------------------------------------------------------------
+#
+# The only message in the engine about something that could harm a person, so
+# these tests are as much about when it stays quiet as when it speaks.
+
+
+def _reliable_tdee(kcal: int = 3000) -> TdeeEstimate:
+    return TdeeEstimate(estimate_kcal=kcal, days_of_data=21, reliable=True)
+
+
+def test_a_large_sustained_deficit_is_flagged() -> None:
+    """The user's own example: 1500 kcal against a measured maintenance of 3000."""
+    result = from_low_intake(_reliable_tdee(3000), [1500] * 14)
+
+    assert len(result) == 1
+    assert result[0].kind == "low_intake"
+    assert "1,500 kcal" in result[0].message
+    assert "50%" in result[0].message
+    assert "3,000 kcal" in result[0].message
+    assert result[0].evidence["pct_of_maintenance"] == 50
+
+
+def test_the_message_observes_rather_than_instructs() -> None:
+    """Approved wording. It must not tell anyone what to eat, or imply clearance."""
+    message = from_low_intake(_reliable_tdee(3000), [1500] * 14)[0].message
+
+    assert "doctor or dietitian" in message
+    for instruction in ("you should", "you must", "eat more", "increase your"):
+        assert instruction not in message.lower()
+
+
+def test_an_ordinary_cut_is_left_alone() -> None:
+    """A 20% deficit is normal dieting and none of the app's business."""
+    assert from_low_intake(_reliable_tdee(3000), [2400] * 14) == []
+
+
+def test_nothing_is_said_while_maintenance_is_still_a_guess() -> None:
+    """Without a measured maintenance the comparison would rest on a formula.
+
+    Calling someone's eating dangerous on the strength of a population equation
+    is worse than saying nothing, so the rule does not fire at all.
+    """
+    unreliable = TdeeEstimate(estimate_kcal=3000, days_of_data=4, reliable=False)
+
+    assert from_low_intake(unreliable, [1200] * 14) == []
+
+
+def test_a_few_light_days_are_not_a_pattern() -> None:
+    days: list[int | None] = [None] * 9 + [1200] * 5
+
+    assert from_low_intake(_reliable_tdee(3000), days) == []
+
+
+def test_unlogged_days_are_skipped_not_counted_as_zero() -> None:
+    """Same rule as steps: a day nobody recorded is not a day nobody ate.
+
+    Ten logged days at 2400 average 2400 and stay quiet. Counting the four
+    blanks as zero would drag the mean to 1714 and fire a health warning at
+    someone who is eating normally.
+    """
+    days: list[int | None] = [2400] * 10 + [None] * 4
+
+    assert from_low_intake(_reliable_tdee(3000), days) == []
+
+
+def test_it_outranks_everything_else() -> None:
+    low = from_low_intake(_reliable_tdee(3000), [1500] * 14)
+    nudge = [Suggestion(id="n", kind="logging_nudge", message="log something")]
+
+    ranked = assemble(nudge, low)
+
+    assert ranked[0].kind == "low_intake"
