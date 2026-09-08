@@ -11,6 +11,7 @@ directions. See DECISIONS.md. This module is the entire difference: the router,
 schemas and tests are storage-agnostic.
 """
 
+import re
 import uuid
 from functools import lru_cache
 
@@ -100,6 +101,11 @@ def list_buckets() -> list[str]:
     return [bucket["name"] for bucket in response.json()]
 
 
+#: Exactly what `build_key` emits: `{uuid4}/{uuid4}.jpg`, nothing else. Anchored
+#: so no path separator, traversal segment or alternative extension can slip in.
+_KEY_SHAPE = re.compile(r"[0-9a-f-]{36}/[0-9a-f-]{36}\.jpg")
+
+
 def build_key(user_id: uuid.UUID) -> str:
     """`{user_id}/{uuid}.jpg` (spec §9).
 
@@ -110,8 +116,15 @@ def build_key(user_id: uuid.UUID) -> str:
 
 
 def owns_key(user_id: uuid.UUID, key: str) -> bool:
-    """Guard against a client claiming a key under someone else's prefix."""
-    return key.startswith(f"{user_id}/")
+    """Guard against a client claiming a key under someone else's prefix.
+
+    Matches the exact shape `build_key` produces rather than testing the prefix.
+    A prefix test accepts `{user_id}/../{someone_else}/photo.jpg`, which starts
+    with the caller's prefix but does not stay under it — whether the storage
+    backend resolves that `..` is its business, and not something this check
+    should be relying on.
+    """
+    return _KEY_SHAPE.fullmatch(key) is not None and key.startswith(f"{user_id}/")
 
 
 def presign_upload(key: str, content_type: str) -> str:

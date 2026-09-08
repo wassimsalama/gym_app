@@ -88,6 +88,30 @@ def test_a_lookalike_prefix_is_not_ownership() -> None:
     assert storage.owns_key(user_id, f"{user_id}extra/photo.jpg") is False
 
 
+def test_traversal_out_of_the_prefix_is_not_ownership() -> None:
+    """A key may not climb out of the prefix it appears to be under.
+
+    `{mine}/../{theirs}/x.jpg` starts with `{mine}/`, so a prefix test accepts
+    it. Whether the storage backend then resolves the `..` is its business, not
+    something this check should be betting on.
+    """
+    mine, theirs = uuid.uuid4(), uuid.uuid4()
+
+    assert storage.owns_key(mine, f"{mine}/../{theirs}/photo.jpg") is False
+    assert storage.owns_key(mine, f"{mine}/..%2f{theirs}/photo.jpg") is False
+    assert storage.owns_key(mine, f"{mine}/sub/dir/photo.jpg") is False
+
+
+def test_only_the_shape_build_key_produces_is_accepted() -> None:
+    """Anything that is not exactly `{user_id}/{uuid4}.jpg` is rejected."""
+    user_id = uuid.uuid4()
+
+    assert storage.owns_key(user_id, storage.build_key(user_id)) is True
+    assert storage.owns_key(user_id, f"{user_id}/photo.png") is False
+    assert storage.owns_key(user_id, f"{user_id}/not-a-uuid.jpg") is False
+    assert storage.owns_key(user_id, f"{user_id}/") is False
+
+
 # --- signed URLs -----------------------------------------------------------
 
 
