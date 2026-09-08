@@ -87,6 +87,67 @@ const supabase = source.match(SUPABASE)?.[0];
 if (!supabase)
   fail("no Supabase URL in the bundle — EXPO_PUBLIC_SUPABASE_URL is unset");
 
+// Wrangler silently skips every path containing `node_modules` when it uploads,
+// so an asset emitted under assets/node_modules/... builds fine, passes every
+// local check, and is simply absent in production — the request falls through to
+// the SPA fallback and the browser receives index.html. That is how the icon font
+// went missing: Chrome had a cached copy and looked fine, Safari asked for it,
+// got HTML, and correctly refused. Metro mirrors an asset's source path into the
+// output, so anything required straight out of a package lands there. Vendor it
+// into app/assets instead.
+const assetsDir = path.join(DIST, "assets");
+if (fs.existsSync(assetsDir)) {
+  const walk = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      return entry.isDirectory() ? walk(full) : [full];
+    });
+
+  const emitted = walk(assetsDir).map((f) => path.relative(DIST, f));
+  const underNodeModules = (f) => f.split(path.sep).includes("node_modules");
+  const isFont = (f) => /\.(ttf|otf|woff2?)$/i.test(f);
+
+  // Wrangler silently skips every path containing `node_modules`, so an asset
+  // emitted there is absent in production and the request falls through to the
+  // SPA fallback — the browser gets index.html where the file should be. Metro
+  // mirrors an asset's source path into the output, so anything required
+  // straight out of a package lands in exactly that dead zone.
+  //
+  // A missing font is not a missing picture: every glyph drawn from it vanishes.
+  // That is how the tab bar lost its icons in Safari while Chrome sat on a
+  // cached copy and looked correct.
+  //
+  // The check is that a *deployable* copy exists, not that the package copy is
+  // absent. The icon package references its own font whatever we do; what
+  // matters is that the copy we register at runtime is one wrangler will upload.
+  const strandedFonts = emitted.filter((f) => isFont(f) && underNodeModules(f));
+  const deployableFonts = emitted.filter(
+    (f) => isFont(f) && !underNodeModules(f),
+  );
+
+  for (const font of strandedFonts) {
+    const name = path.basename(font);
+    if (!deployableFonts.some((f) => path.basename(f) === name)) {
+      fail(
+        `${name} is only emitted under node_modules, where wrangler will not ` +
+          "upload it — the browser will receive HTML instead of a font and every " +
+          "glyph drawn from it will disappear.\n\n" +
+          "  Copy it into app/assets/fonts and require it from there.",
+      );
+    }
+  }
+
+  const strandedImages = emitted.filter(
+    (f) => !isFont(f) && underNodeModules(f),
+  );
+  if (strandedImages.length > 0) {
+    console.warn(
+      `\n  Note: ${strandedImages.length} package image(s) under node_modules will not ` +
+        "be uploaded. None is user-facing today; if one becomes so, vendor it.",
+    );
+  }
+}
+
 // The shell is patched after export by patch-html.js because Expo ignores
 // +html.tsx under `web.output: "single"`. Without viewport-fit=cover every
 // safe-area inset reads zero on iOS and the page is letterboxed in white, which
