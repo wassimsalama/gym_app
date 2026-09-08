@@ -1,0 +1,30 @@
+# Security headers, served by Cloudflare for every path.
+#
+# Finding [MEDIUM] "No Content-Security-Policy or security headers on the web
+# app" from the security audit.
+#
+# The Supabase session — access token and refresh token — lives in
+# localStorage, which any script running on this origin can read. That is the
+# standard trade-off for a browser app and is documented in
+# app/lib/sessionStorage.ts, but it means a single injected script is durable
+# account access to someone's health data and progress photos. A CSP is what
+# stops a script that is not ours from running at all.
+#
+# script-src is 'self' with no 'unsafe-inline': the export emits exactly one
+# external <script> and no inline ones, so nothing legitimate needs the escape
+# hatch. style-src does need 'unsafe-inline' — the shell carries two inline
+# <style> blocks and React Native Web injects rules at runtime. Inline styles
+# are a far weaker vector than inline scripts.
+#
+# connect-src is the API and Supabase, the only two hosts this app talks to.
+# img-src includes the Supabase host because progress photos are fetched from
+# signed storage URLs, and blob:/data: because the picker previews locally
+# before upload.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://fdidttqeqwgozfuwdwjh.supabase.co; font-src 'self' data:; connect-src 'self' https://fdidttqeqwgozfuwdwjh.supabase.co https://clever-contentment-production-bcb7.up.railway.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
