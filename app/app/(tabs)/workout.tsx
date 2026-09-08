@@ -1,9 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Card } from '@/components/Card';
 import { ExerciseSearch } from '@/components/ExerciseSearch';
 import { Stepper } from '@/components/Stepper';
@@ -221,11 +222,10 @@ export default function Workout() {
     }
   }, []);
 
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+
   function confirmDiscard() {
-    Alert.alert('Discard this session?', 'Nothing logged so far will be saved.', [
-      { text: 'Keep going', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: reset },
-    ]);
+    setConfirmingDiscard(true);
   }
 
   return (
@@ -411,6 +411,19 @@ export default function Workout() {
       {searching ? (
         <ExerciseSearch onPick={addExercise} onClose={() => setSearching(false)} />
       ) : null}
+      <ConfirmDialog
+        visible={confirmingDiscard}
+        title="Discard this session?"
+        message="Nothing logged so far will be saved."
+        confirmLabel="Discard"
+        cancelLabel="Keep going"
+        destructive
+        onConfirm={() => {
+          setConfirmingDiscard(false);
+          reset();
+        }}
+        onCancel={() => setConfirmingDiscard(false)}
+      />
     </View>
   );
 }

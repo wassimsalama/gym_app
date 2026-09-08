@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, Text, type PressableProps } from 'react-n
 
 type Props = PressableProps & {
   title: string;
-  variant?: 'primary' | 'ghost';
+  variant?: 'primary' | 'ghost' | 'danger';
   loading?: boolean;
 };
 
@@ -14,15 +14,19 @@ export function Button({ title, variant = 'primary', loading = false, disabled, 
       ? isDisabled
         ? 'bg-accent/40'
         : 'bg-accent active:bg-accent/80'
-      : 'border border-line active:bg-surface';
+      : variant === 'danger'
+        ? isDisabled
+          ? 'bg-danger/40'
+          : 'bg-danger active:bg-danger/80'
+        : 'border border-line active:bg-surface';
 
   return (
     <Pressable className={`${base} ${look}`} disabled={isDisabled} {...rest}>
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? '#0B0F14' : '#8A97A6'} />
+        <ActivityIndicator color={variant === 'ghost' ? '#8A97A6' : '#0B0F14'} />
       ) : (
         <Text
-          className={`text-base font-semibold ${variant === 'primary' ? 'text-ink' : 'text-muted'}`}
+          className={`text-base font-semibold ${variant === 'ghost' ? 'text-muted' : 'text-ink'}`}
         >
           {title}
         </Text>

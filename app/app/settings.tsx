@@ -1,15 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -97,12 +88,14 @@ export default function Settings() {
       await clearCache();
       await supabase.auth.signOut();
 
-      Alert.alert(
-        'Account deleted',
-        'Your data has been removed. Deleting the sign-in itself is handled by ' +
-          'Supabase and may take a moment to disappear everywhere.',
-      );
-      router.replace('/(auth)/sign-in');
+      // The confirmation used to be an Alert, which does nothing on the web —
+      // so the account was deleted and the user was returned to sign-in with no
+      // explanation at all. Carried on the destination instead, where it is
+      // seen on every platform.
+      router.replace({
+        pathname: '/(auth)/sign-in',
+        params: { notice: 'account-deleted' },
+      });
     } catch (err) {
       setError(describeError(err, 'Could not delete your account'));
       setBusy(false);
