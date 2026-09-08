@@ -38,8 +38,9 @@ def confirm(body: PhotoConfirm, user: WriteUser, db: DbSession) -> PhotoOut:
     storage.require_configured()
 
     if not storage.owns_key(user.id, body.s3_key):
-        # Someone else's prefix — say nothing about whether it exists.
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not yours")
+        # Someone else's prefix, or not a key this API ever issued. 404, not
+        # 403 — see the note in workout_sessions.create_session.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     existing = db.scalar(select(Photo).where(Photo.user_id == user.id, Photo.s3_key == body.s3_key))
     if existing is not None:

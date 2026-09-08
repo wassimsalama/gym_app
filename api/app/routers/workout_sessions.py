@@ -53,8 +53,9 @@ def create_session(
     )
     if existing is not None:
         if existing.user_id != user.id:
-            # Someone else's idempotency key. Say nothing about it existing.
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not yours")
+            # Someone else's idempotency key. 404, not 403 — a 403 would confirm
+            # the key is in use, which is exactly what must not be revealed.
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
         # Already stored — replaying the save must not re-announce the PRs, or
         # a flaky connection would celebrate the same lift repeatedly.
         response.status_code = status.HTTP_200_OK

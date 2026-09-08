@@ -123,7 +123,8 @@ def test_a_key_under_someone_elses_prefix_is_refused(
     resp = client.post(
         "/photos", json={"s3_key": stranger_key, "taken_on": "2026-09-07"}, headers=auth_headers
     )
-    assert resp.status_code == 403
+    # 404 rather than 403: a 403 would confirm the key exists.
+    assert resp.status_code == 404
 
 
 # --- listing ---------------------------------------------------------------
