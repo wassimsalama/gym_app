@@ -82,3 +82,48 @@ def test_an_unset_list_enables_the_development_fallback() -> None:
 def test_multiple_production_origins_are_parsed() -> None:
     configured = Settings(allowed_origins="https://gym.example.com, https://www.gym.example.com")
     assert configured.origins == ["https://gym.example.com", "https://www.gym.example.com"]
+
+
+# --- interactive docs -------------------------------------------------------
+
+
+def test_docs_are_available_in_development() -> None:
+    """A developer machine sets no origins, so the docs stay reachable."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as dev_client:
+        assert dev_client.get("/openapi.json").status_code == 200
+
+
+def test_docs_are_gone_once_production_origins_are_set(monkeypatch) -> None:
+    """Configuring real origins is what marks the app as deployed.
+
+    Rebuilt rather than mutated, because docs_url is read when FastAPI is
+    constructed, not per request — testing the live object would prove nothing
+    about how the deployed process starts.
+    """
+    import importlib
+
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://www.stallpoint.org")
+
+    from app.core import config
+
+    config.get_settings.cache_clear()
+    import app.main
+
+    reloaded = importlib.reload(app.main)
+
+    try:
+        assert reloaded.settings.is_production is True
+        with TestClient(reloaded.app) as prod_client:
+            assert prod_client.get("/openapi.json").status_code == 404
+            assert prod_client.get("/docs").status_code == 404
+            assert prod_client.get("/redoc").status_code == 404
+    finally:
+        monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+        config.get_settings.cache_clear()
+        importlib.reload(app.main)
