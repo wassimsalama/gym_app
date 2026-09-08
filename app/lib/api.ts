@@ -30,6 +30,8 @@ export type Split = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full' | 'oth
 export type DailyLog = {
   log_date: IsoDate;
   weight_kg: number | null;
+  /** null means the day was never logged, which is not the same as 0. */
+  steps: number | null;
   calories: number | null;
   protein_g: number | null;
   carbs_g: number | null;
@@ -70,6 +72,14 @@ export type Dashboard = {
     start_weight_kg: number;
     goal_weight_kg: number;
   } | null;
+  /** `average` is null when nothing in the window was logged. Unlogged days are
+   *  skipped, never counted as zero. */
+  steps: {
+    today: number | null;
+    average: number | null;
+    days_logged: number;
+    reliable: boolean;
+  };
   tdee: { estimate_kcal: number | null; days_of_data: number; reliable: boolean };
   volume: { muscle_group: string; sets_this_week: number; weekly_target: number }[];
   prs_recent: {

@@ -66,6 +66,7 @@ def test_shape_is_complete_with_no_data(client: TestClient, auth_headers: dict[s
         "weight",
         "goal",
         "tdee",
+        "steps",
         "volume",
         "prs_recent",
         "suggestions",
@@ -296,3 +297,33 @@ def test_a_custom_exercise_still_buckets_into_its_group(
 
     volume = {r["muscle_group"]: r for r in dashboard(client, auth_headers)["volume"]}
     assert volume["quads"]["sets_this_week"] == 2
+
+
+# --- steps ------------------------------------------------------------------
+
+
+def test_steps_are_absent_until_something_is_logged(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    body = dashboard(client, auth_headers)
+
+    assert body["steps"]["today"] is None
+    assert body["steps"]["average"] is None
+    assert body["steps"]["days_logged"] == 0
+    assert body["steps"]["reliable"] is False
+
+
+def test_the_step_average_ignores_days_with_no_count(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """Two logged days of 10000 average 10000, not 10000 spread over the week."""
+    client.put("/daily-logs/2026-09-06", json={"steps": 10_000}, headers=auth_headers)
+    client.put("/daily-logs/2026-09-07", json={"steps": 10_000}, headers=auth_headers)
+    # A day logged for weight only — present in the window, no step count.
+    client.put("/daily-logs/2026-09-05", json={"weight_kg": 80}, headers=auth_headers)
+
+    body = dashboard(client, auth_headers, on="2026-09-07")
+
+    assert body["steps"]["average"] == 10_000
+    assert body["steps"]["days_logged"] == 2
+    assert body["steps"]["today"] == 10_000
