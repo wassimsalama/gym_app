@@ -42,7 +42,8 @@ export default function Photos() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DisplayError | null>(null);
 
-  const [viewing, setViewing] = useState<Photo | null>(null);
+  const [viewingDay, setViewingDay] = useState<IsoDate | null>(null);
+  const [viewingIndex, setViewingIndex] = useState(0);
   const [comparing, setComparing] = useState(false);
   const [comparison, setComparison] = useState<[Photo | null, Photo | null]>([null, null]);
 
@@ -76,11 +77,24 @@ export default function Photos() {
     };
   }, [month]);
 
-  /** One photo per day, keyed by date, for the calendar grid. */
+  /**
+   * Every photo taken on a day, keyed by date.
+   *
+   * This used to keep only the first and drop the rest, so a second photo on a
+   * day uploaded fine, stored fine and was then invisible. Nothing in the
+   * database or the API ever restricted this — there is no uniqueness
+   * constraint on (user_id, taken_on) — it was only the grid assuming one.
+   *
+   * The API returns taken_on DESC, id DESC. Within a day that is newest first;
+   * reversed here so swiping left-to-right runs forward in time, like the rest
+   * of the app.
+   */
   const byDate = useMemo(() => {
-    const map = new Map<IsoDate, Photo>();
+    const map = new Map<IsoDate, Photo[]>();
     photos.forEach((photo) => {
-      if (!map.has(photo.taken_on)) map.set(photo.taken_on, photo);
+      const day = map.get(photo.taken_on);
+      if (day) day.unshift(photo);
+      else map.set(photo.taken_on, [photo]);
     });
     return map;
   }, [photos]);
@@ -94,6 +108,25 @@ export default function Photos() {
     }
     return days;
   }, [month]);
+
+  const viewingPhotos = viewingDay ? (byDate.get(viewingDay) ?? []) : [];
+
+  // Clamped as it is read, not corrected in an effect. Deleting the last photo
+  // of a day shortens the list under a stored index, and writing the fix back
+  // as state means a render where the index is out of range — the React
+  // Compiler rejects set-state-in-effect for exactly this reason.
+  const viewingIndexSafe = Math.min(viewingIndex, Math.max(0, viewingPhotos.length - 1));
+  const viewing = viewingPhotos[viewingIndexSafe] ?? null;
+
+  function openDay(date: IsoDate) {
+    setViewingDay(date);
+    setViewingIndex(0);
+  }
+
+  function closeViewer() {
+    setViewingDay(null);
+    setViewingIndex(0);
+  }
 
   const add = useCallback(
     async (from: 'camera' | 'library') => {
@@ -141,9 +174,11 @@ export default function Photos() {
   const [pendingDelete, setPendingDelete] = useState<Photo | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const confirmDelete = useCallback((photo: Photo) => setPendingDelete(photo), []);
+  function confirmDelete(photo: Photo) {
+    setPendingDelete(photo);
+  }
 
-  const runDelete = useCallback(async () => {
+  async function runDelete() {
     const photo = pendingDelete;
     if (!photo) return;
 
@@ -151,7 +186,10 @@ export default function Photos() {
     try {
       await deletePhoto(photo.id);
       setPendingDelete(null);
-      setViewing(null);
+      // Only leave the viewer when that was the day's last photo. Deleting one
+      // of several stays put, on the neighbour, which is what you want when
+      // clearing out a few in a row.
+      if (viewingPhotos.length <= 1) closeViewer();
       await load(month);
     } catch (err) {
       setPendingDelete(null);
@@ -159,7 +197,7 @@ export default function Photos() {
     } finally {
       setDeleting(false);
     }
-  }, [pendingDelete, month, load]);
+  }
 
   function pickForComparison(photo: Photo) {
     setComparison(([first]) => (first === null ? [photo, null] : [first, photo]));
@@ -232,7 +270,8 @@ export default function Photos() {
                     />
                   );
                 }
-                const photo = byDate.get(date);
+                const dayPhotos = byDate.get(date) ?? [];
+                const photo = dayPhotos[0] ?? null;
                 const selected = comparing && (left?.id === photo?.id || right?.id === photo?.id);
 
                 return (
@@ -246,16 +285,25 @@ export default function Photos() {
                     onPress={() => {
                       if (!photo) return;
                       if (comparing) pickForComparison(photo);
-                      else setViewing(photo);
+                      else openDay(date);
                     }}
                   >
                     {photo ? (
-                      <Image
-                        source={{ uri: photo.thumb_url ?? photo.view_url }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                        transition={120}
-                      />
+                      <>
+                        <Image
+                          source={{ uri: photo.thumb_url ?? photo.view_url }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                          transition={120}
+                        />
+                        {dayPhotos.length > 1 ? (
+                          <View className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1">
+                            <Text className="text-[10px] font-semibold text-white">
+                              {dayPhotos.length}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </>
                     ) : (
                       <Text className="text-xs text-line">{Number(date.slice(-2))}</Text>
                     )}
@@ -323,18 +371,17 @@ export default function Photos() {
         )}
       </ScrollView>
 
-      <Modal
-        visible={viewing !== null}
-        animationType="fade"
-        onRequestClose={() => setViewing(null)}
-      >
+      <Modal visible={viewingDay !== null} animationType="fade" onRequestClose={closeViewer}>
         <View className="flex-1 bg-black" style={{ paddingTop: insets.top }}>
           <View className="flex-row items-center justify-between px-5 py-3">
-            <Pressable onPress={() => setViewing(null)}>
+            <Pressable onPress={closeViewer}>
               <Text className="text-base font-semibold text-white">Close</Text>
             </Pressable>
             <Text className="text-sm text-muted">
               {viewing ? formatLong(viewing.taken_on) : ''}
+              {viewingPhotos.length > 1
+                ? `  ·  ${viewingIndexSafe + 1} of ${viewingPhotos.length}`
+                : ''}
             </Text>
             <Pressable onPress={() => viewing && confirmDelete(viewing)}>
               <Text className="text-base font-semibold text-danger">Delete</Text>
@@ -347,6 +394,59 @@ export default function Photos() {
               contentFit="contain"
               transition={150}
             />
+          ) : null}
+
+          {/*
+            Explicit controls rather than swipe alone. A paging ScrollView is the
+            obvious way to do this and works on a phone, but its behaviour on the
+            web varies by browser and this screen sits behind the login where it
+            cannot be checked automatically. Buttons work everywhere, so the
+            feature does not depend on a gesture nobody verified.
+          */}
+          {viewingPhotos.length > 1 ? (
+            <View
+              className="flex-row items-center justify-between px-5 py-4"
+              style={{ paddingBottom: insets.bottom + 16 }}
+            >
+              <Pressable
+                disabled={viewingIndexSafe === 0}
+                onPress={() => setViewingIndex((i) => Math.max(0, i - 1))}
+                className="rounded-xl border border-line px-5 py-3"
+              >
+                <Text
+                  className={`text-base font-semibold ${
+                    viewingIndexSafe === 0 ? 'text-line' : 'text-white'
+                  }`}
+                >
+                  Previous
+                </Text>
+              </Pressable>
+
+              <View className="flex-row gap-1.5">
+                {viewingPhotos.map((p, i) => (
+                  <View
+                    key={p.id}
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      i === viewingIndexSafe ? 'bg-white' : 'bg-line'
+                    }`}
+                  />
+                ))}
+              </View>
+
+              <Pressable
+                disabled={viewingIndexSafe >= viewingPhotos.length - 1}
+                onPress={() => setViewingIndex((i) => Math.min(viewingPhotos.length - 1, i + 1))}
+                className="rounded-xl border border-line px-5 py-3"
+              >
+                <Text
+                  className={`text-base font-semibold ${
+                    viewingIndexSafe >= viewingPhotos.length - 1 ? 'text-line' : 'text-white'
+                  }`}
+                >
+                  Next
+                </Text>
+              </Pressable>
+            </View>
           ) : null}
         </View>
       </Modal>
