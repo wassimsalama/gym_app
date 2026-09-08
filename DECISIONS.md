@@ -16,6 +16,29 @@ chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
 
+## 2026-09-08 — `app/.env.production` is committed, on purpose
+
+Cloudflare's hosted build kept failing because it was not passing build-time
+variables to the build step, and the difference between its "build variables"
+and "runtime variables" is not visible from a failure. Two attempts at
+configuring it correctly did not stick.
+
+Rather than keep guessing at a vendor UI, the dependency was removed: the file
+is now in git.
+
+This is safe because none of it is secret. `EXPO_PUBLIC_*` values are inlined
+into the JavaScript every visitor downloads — verified by pulling the anon key
+straight out of the live site's bundle, where it already sits. Keeping them out
+of version control protects nothing and breaks any host that does not thread
+build variables through.
+
+Row level security is what makes publishing the anon key safe. Before migration
+`0003` it granted read and write access to every table; now it grants nothing.
+
+The boundary that matters is unchanged and stated in the file's header: the
+`service_role` key, the database password and the JWT secret are server-side
+only, live in Railway's variables, and never enter this repository.
+
 ## 2026-09-08 — Row level security: the API could be bypassed entirely — **found by Wes**
 
 Wes asked whether RLS was needed. It was, urgently, and nothing else built so

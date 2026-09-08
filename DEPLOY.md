@@ -148,14 +148,18 @@ Nothing else to do — the API runs its own migrations on start.
 Build locally and upload the output. Expo's web export is a static folder, so
 there is nothing to run.
 
-Production values live in **`app/.env.production`** (gitignored), leaving `.env`
-pointed at local development:
+Production values live in **`app/.env.production`**, which is **committed**.
 
-```
-EXPO_PUBLIC_API_URL=https://<your-api>.up.railway.app
-EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-```
+Every value in it is `EXPO_PUBLIC_*`, meaning Expo inlines it into the bundle
+every visitor downloads — including the anon key, which exists to be shipped to
+browsers. They are public the moment the site is live, so keeping them out of
+git protects nothing while breaking builds on any host that does not pass
+build-time variables through. Row level security (migration `0003`) is what
+makes the anon key safe to publish: it grants access to nothing.
+
+Real secrets — the `service_role` key, the database password, the JWT secret —
+are server-side only and live in Railway's variables. They never enter this
+repository.
 
 Then, from the repo root:
 
