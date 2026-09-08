@@ -25,10 +25,16 @@ class GoalCreate(BaseModel):
 class GoalUpdate(BaseModel):
     """Body of `PATCH /goals/active`.
 
-    Changing where you are heading is not the same as starting over, so this
-    deliberately cannot touch `start_weight_kg` or `start_date` — editing a
-    target must not silently reset the baseline progress is measured from.
-    Re-baselining is `POST /goals`, which is an explicit new goal.
+    `start_weight_kg` is editable, which is a deliberate deviation from §7.1 —
+    see DECISIONS.md. The spec fixes the baseline so that adjusting a target
+    cannot silently reset progress to zero, and that reasoning still holds for
+    *targets*. It does not hold for a mistyped starting weight: the only route
+    to fixing one was starting a new goal, which threw away the goal's history
+    to correct a number that was never right.
+
+    `start_date` remains untouched. Moving it would change which observations
+    count toward the trend, which is re-baselining, and re-baselining is
+    `POST /goals` — an explicit new goal.
 
     Unset fields are left alone; `target_date: null` clears the date.
     """
@@ -36,6 +42,7 @@ class GoalUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     goal_weight_kg: Decimal | None = Field(default=None, gt=0, le=MAX_BODY_WEIGHT_KG)
+    start_weight_kg: Decimal | None = Field(default=None, gt=0, le=MAX_BODY_WEIGHT_KG)
     target_date: date | None = None
 
 

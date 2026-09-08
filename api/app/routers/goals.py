@@ -70,11 +70,18 @@ def get_active_goal(user: ReadUser, db: DbSession) -> Goal:
 
 @router.patch("/active", response_model=GoalOut)
 def update_active_goal(body: GoalUpdate, user: WriteUser, db: DbSession) -> Goal:
-    """Change the target of the goal already in flight.
+    """Change the goal already in flight.
 
-    Only the destination moves. `start_weight_kg` and `start_date` are
-    untouched, so adjusting a target does not quietly reset progress to zero —
-    that would make the number meaningless. Starting over is `POST /goals`.
+    The destination moves, and so may the baseline: a mistyped starting weight
+    used to be fixable only by starting a new goal, which discarded the goal's
+    history to correct a number that was never right (DECISION 1(a), a §7.1
+    deviation recorded in DECISIONS.md).
+
+    `start_date` is still untouched. Moving it changes which observations count
+    toward the trend, which is re-baselining, and that is `POST /goals`.
+
+    Progress and the projection are derived at read time from these two numbers,
+    so correcting the baseline recalculates both with no extra work here.
     """
     goal = db.scalar(
         select(Goal)

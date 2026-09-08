@@ -214,11 +214,17 @@ def test_patch_rejects_an_empty_body_and_bad_values(
         client.patch("/goals/active", json={"goal_weight_kg": 0}, headers=auth_headers).status_code
         == 422
     )
+    # start_weight_kg used to be refused here. It is editable as of DECISION
+    # 1(a); the guard that matters is that unknown fields are still refused, so
+    # nothing else can be smuggled onto the goal.
     assert (
         client.patch(
-            "/goals/active", json={"start_weight_kg": 50}, headers=auth_headers
+            "/goals/active", json={"start_date": "2026-01-01"}, headers=auth_headers
         ).status_code
         == 422
+    )
+    assert (
+        client.patch("/goals/active", json={"user_id": 1}, headers=auth_headers).status_code == 422
     )
 
 
@@ -232,3 +238,44 @@ def test_patch_cannot_reach_another_users_goal(
     assert (
         client.patch("/goals/active", json={"goal_weight_kg": 60}, headers=other).status_code == 404
     )
+
+
+# --- editing the baseline (DECISION 1(a), a deliberate §7.1 deviation) -------
+
+
+def test_the_starting_weight_can_be_corrected(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A typo in the baseline must be fixable without losing the goal."""
+    client.put("/daily-logs/2026-09-01", json={"weight_kg": 100}, headers=auth_headers)
+    client.post("/goals", json={"goal_weight_kg": 90}, headers=auth_headers)
+
+    resp = client.patch("/goals/active", json={"start_weight_kg": 105}, headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert Decimal(resp.json()["start_weight_kg"]) == Decimal("105")
+    assert Decimal(resp.json()["goal_weight_kg"]) == Decimal("90")
+
+
+def test_correcting_the_baseline_does_not_start_a_new_goal(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    client.put("/daily-logs/2026-09-01", json={"weight_kg": 100}, headers=auth_headers)
+    created = client.post("/goals", json={"goal_weight_kg": 90}, headers=auth_headers).json()
+
+    client.patch("/goals/active", json={"start_weight_kg": 105}, headers=auth_headers)
+    after = client.get("/goals/active", headers=auth_headers).json()
+
+    assert after["id"] == created["id"]
+    assert after["start_date"] == created["start_date"]
+
+
+def test_an_impossible_starting_weight_is_refused(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    client.put("/daily-logs/2026-09-01", json={"weight_kg": 100}, headers=auth_headers)
+    client.post("/goals", json={"goal_weight_kg": 90}, headers=auth_headers)
+
+    for bad in (0, -5, 10_000):
+        resp = client.patch("/goals/active", json={"start_weight_kg": bad}, headers=auth_headers)
+        assert resp.status_code == 422, bad

@@ -226,8 +226,11 @@ export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null)
  * editing where you're heading must not reset how far you've come.
  * Omitted keys are left alone; `target_date: null` clears the date.
  */
-export const updateGoal = (patch: { goal_weight_kg?: number; target_date?: IsoDate | null }) =>
-  api.patch<Goal>('/goals/active', patch);
+export const updateGoal = (patch: {
+  goal_weight_kg?: number;
+  start_weight_kg?: number;
+  target_date?: IsoDate | null;
+}) => api.patch<Goal>('/goals/active', patch);
 
 /** Resolves to null rather than throwing when no goal has been set yet. */
 export async function getActiveGoal(): Promise<Goal | null> {

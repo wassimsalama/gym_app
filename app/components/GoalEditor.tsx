@@ -37,6 +37,9 @@ export function GoalEditor({ visible, goal, unit, currentKg, onClose, onSaved }:
   // via `key` each time it opens, so a cancelled edit leaves nothing behind and
   // no effect has to chase prop changes.
   const [weight, setWeight] = useState(() => fromKg(goal.goal_weight_kg, unit).toFixed(1));
+  const [startWeight, setStartWeight] = useState(() =>
+    fromKg(goal.start_weight_kg, unit).toFixed(1),
+  );
   const [targetDate, setTargetDate] = useState<IsoDate | null>(goal.target_date);
   const [pickingDate, setPickingDate] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState<IsoDate>(
@@ -53,10 +56,20 @@ export function GoalEditor({ visible, goal, unit, currentKg, onClose, onSaved }:
       return;
     }
 
+    const startKg = parseWeightInput(startWeight, unit);
+    if (startKg === null) {
+      setError('Enter the weight you started from');
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      await updateGoal({ goal_weight_kg: kg, target_date: targetDate });
+      await updateGoal({
+        goal_weight_kg: kg,
+        start_weight_kg: startKg,
+        target_date: targetDate,
+      });
       onSaved();
       onClose();
     } catch (err) {
@@ -143,6 +156,24 @@ export function GoalEditor({ visible, goal, unit, currentKg, onClose, onSaved }:
                   onChangeText={setWeight}
                   selectTextOnFocus
                 />
+
+                <Text className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-muted">
+                  Started from ({unit})
+                </Text>
+                <TextInput
+                  className="h-16 rounded-2xl border border-line bg-ink px-4 text-3xl font-bold text-white"
+                  placeholder="—"
+                  placeholderTextColor="#3A4552"
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  value={startWeight}
+                  onChangeText={setStartWeight}
+                  selectTextOnFocus
+                />
+                <Text className="mt-2 text-xs text-muted">
+                  Progress is measured from this. Correct it if it was wrong — that keeps the goal
+                  and its history. To measure from today instead, start over below.
+                </Text>
 
                 <Pressable
                   className="mt-3 flex-row items-center justify-between rounded-xl border border-line px-4 py-3 active:bg-line"
