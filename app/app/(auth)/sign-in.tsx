@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { PasswordInput } from '@/components/PasswordInput';
-import { resendConfirmation, signIn } from '@/lib/auth';
+import { isServerFault, resendConfirmation, signIn } from '@/lib/auth';
 import { describeWait, recordFailure, recordSuccess, secondsRemaining } from '@/lib/loginThrottle';
 
 export default function SignIn() {
@@ -63,6 +63,14 @@ export default function SignIn() {
       // out of the screen that offers the actual remedy.
       if (authError.code === 'email_not_confirmed') {
         setUnconfirmed(true);
+      } else if (isServerFault(authError)) {
+        // Not a failed attempt. The server was unreachable or broken, so this
+        // says nothing about the password and must not count toward a lockout —
+        // otherwise an outage locks people out of the one screen they are
+        // waiting on, which is exactly what happened when the database paused.
+        setError(
+          'Could not reach the server. Nothing is wrong with your details — try again shortly.',
+        );
       } else {
         const next = recordFailure(email);
         setLockedFor(next);
