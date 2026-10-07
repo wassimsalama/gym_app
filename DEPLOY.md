@@ -148,14 +148,19 @@ Nothing else to do — the API runs its own migrations on start.
 Build locally and upload the output. Expo's web export is a static folder, so
 there is nothing to run.
 
-Production values live in **`app/.env.production`**, which is **committed**.
+Production values live in **`app/.env.production`**, which is **not committed**
+— it is gitignored and exists only on the machine you deploy from. Create it
+from `app/.env.example` with the production API URL, Supabase URL and anon key.
 
-Every value in it is `EXPO_PUBLIC_*`, meaning Expo inlines it into the bundle
-every visitor downloads — including the anon key, which exists to be shipped to
-browsers. They are public the moment the site is live, so keeping them out of
-git protects nothing while breaking builds on any host that does not pass
-build-time variables through. Row level security (migration `0003`) is what
-makes the anon key safe to publish: it grants access to nothing.
+Every value in it is `EXPO_PUBLIC_*`, so Expo inlines it into the bundle every
+visitor downloads; the anon key in particular is public the moment the site is
+live, and row level security (migration `0003`) is what makes that safe. It is
+kept out of git anyway, because env files do not belong in a public repository
+and nothing here needs it there: the site is deployed from a local build with
+`wrangler pages deploy`, which reads the file from disk.
+
+If the file is missing, the build fails loudly — `verify-build.js` rejects a
+bundle with no production API URL rather than shipping one pointed at nothing.
 
 Real secrets — the `service_role` key, the database password, the JWT secret —
 are server-side only and live in Railway's variables. They never enter this

@@ -76,6 +76,30 @@ One existing test asserted the old rule and was updated rather than deleted:
 what it was really protecting is that unknown fields cannot be smuggled onto a
 goal, so it now checks `start_date` and `user_id` are still refused.
 
+## 2026-10-07 — `app/.env.production` is no longer committed (reverses 2026-09-08)
+
+The September decision below committed the file so Cloudflare's hosted build
+could see the variables. That build was the Worker, which has since been
+deleted; the site is now deployed from a local build with `wrangler pages
+deploy`, which reads the file from disk. The reason for committing it is gone.
+
+The user's rule is that env files do not go in a public repository, and that
+now costs nothing to honour, so the file is gitignored again and kept locally.
+
+A full scan of all 62 commits found nothing secret was ever in it: the only JWT
+ever committed is the anon key (`role=anon`), and there is no service-role key,
+`sb_secret_` key, database password, JWT secret or deploy token anywhere in
+history. The anon key is public by design and inert under RLS, so it was not
+rotated — rotating it means rotating the JWT secret and signing every user out,
+for no gain. The file remains in git history; removing it from history would
+need a force push and was not done.
+
+One lesson from the scan itself: the first two passes reported "none" for
+everything, including a string known to be present, because zsh does not
+word-split an unquoted variable and the errors were sent to /dev/null. Only a
+positive control caught it. A secrets scan that cannot report a hit it should
+find is worse than none.
+
 ## 2026-09-08 — `app/.env.production` is committed, on purpose
 
 Cloudflare's hosted build kept failing because it was not passing build-time
