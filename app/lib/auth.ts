@@ -100,6 +100,31 @@ export function useAuth(): AuthState {
   return { session, loading };
 }
 
+/**
+ * Was this failure the server's fault rather than the user's?
+ *
+ * It matters because sign-in failures are throttled, and throttling the wrong
+ * thing locks someone out of a form that was never going to work. When Supabase
+ * paused for inactivity, every retry was recorded as a failed password attempt
+ * and the app eventually refused to try at all — on an account whose password
+ * was perfectly correct.
+ *
+ * Shape rather than `instanceof`: supabase-js re-exports its error classes from
+ * different paths across builds, and a predicate that silently stops matching
+ * would bring the same bug back quietly.
+ *
+ * `status` is absent or 0 when the request never reached a server, 5xx when it
+ * reached one that was broken, and 429 when the server asked us to slow down —
+ * none of which says anything about the password.
+ */
+export function isServerFault(error: { name?: string; status?: number } | null): boolean {
+  if (!error) return false;
+  if (error.name === 'AuthRetryableFetchError') return true;
+
+  const { status } = error;
+  return status === undefined || status === 0 || status === 429 || status >= 500;
+}
+
 export async function signIn(email: string, password: string) {
   return supabase.auth.signInWithPassword({ email: email.trim(), password });
 }
