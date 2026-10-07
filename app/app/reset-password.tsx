@@ -1,11 +1,11 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { PasswordInput } from '@/components/PasswordInput';
-import { updatePassword, useAuth } from '@/lib/auth';
+import { isPasswordRecovery, updatePassword, useAuth } from '@/lib/auth';
 
 const MIN_LENGTH = 6;
 
@@ -49,6 +49,13 @@ export default function ResetPassword() {
   }
 
   if (loading) return null;
+
+  // Signed in, but not via a recovery link — an ordinary session that happened
+  // to land on this route, typically because the tab was left open on it after
+  // an earlier reset. Asking for a new password here is wrong, and because this
+  // screen sits outside the auth guards, signing in would never move you off
+  // it. Changing a password deliberately lives in Settings.
+  if (session && !isPasswordRecovery()) return <Redirect href="/(tabs)" />;
 
   return (
     <KeyboardAvoidingView
@@ -94,7 +101,14 @@ export default function ResetPassword() {
             />
           </>
         ) : (
-          <Button title="Request a new link" onPress={() => router.replace('/forgot-password')} />
+          <>
+            <Button title="Request a new link" onPress={() => router.replace('/forgot-password')} />
+            <Button
+              title="Back to sign in"
+              variant="ghost"
+              onPress={() => router.replace('/(auth)/sign-in')}
+            />
+          </>
         )}
       </View>
     </KeyboardAvoidingView>
