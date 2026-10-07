@@ -14,6 +14,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+/**
+ * Did this page load from a password-recovery link?
+ *
+ * Captured before the client is created, because `detectSessionInUrl` consumes
+ * the hash and strips it — by the time any screen renders, the evidence is gone.
+ *
+ * It matters because /reset-password sits outside both auth guards: a recovery
+ * link has to open it without a session, so nothing stops an ordinary signed-in
+ * user from landing there and being asked to choose a new password for no
+ * reason. Without this, signing in while that route is open leaves you on it,
+ * with no way forward.
+ */
+const initialHash = Platform.OS === 'web' ? (globalThis.location?.hash ?? '') : '';
+let arrivedViaRecovery = /(?:^|[#&])type=recovery(?:&|$)/.test(initialHash);
+
+export function isPasswordRecovery(): boolean {
+  return arrivedViaRecovery;
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: sessionStorage,
@@ -28,6 +47,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Refresh tokens only while the app is actually in front of the user.
 // AppState reports "active" permanently on web, so the listener would be a
 // no-op there; supabase-js handles browser visibility itself.
+// Belt and braces: Supabase emits this when it consumes a recovery link, which
+// covers link formats the hash check above would not recognise.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') arrivedViaRecovery = true;
+});
+
 if (Platform.OS !== 'web') {
   AppState.addEventListener('change', (state) => {
     if (state === 'active') {
