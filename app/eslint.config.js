@@ -5,7 +5,7 @@ const prettier = require('eslint-config-prettier/flat');
 module.exports = defineConfig([
   expoConfig,
   prettier,
-  { ignores: ['dist/*', '.expo/*', 'node_modules/*'] },
+  { ignores: ['dist/*', '.expo/*', 'coverage/*', 'node_modules/*'] },
   {
     rules: {
       // react-native-web's Alert is `static alert() {}` — an empty function.
