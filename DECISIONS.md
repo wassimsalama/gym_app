@@ -8,6 +8,31 @@ moving; say the word and it gets reversed.
 
 ---
 
+## 2026-11-11 — Jest for the frontend (`jest-expo`) — **approved by Wes**
+
+The frontend had no tests at all, and four of the bugs that reached users were
+frontend bugs. New dev dependencies (§14): `jest`, `jest-expo` and
+`@types/jest`, at the versions `npx expo install` picked for SDK 57. They are
+dev-only, so the shipped bundle does not change, and no existing package moved
+in the lockfile.
+
+- **`jest-expo/web`, not the default iOS preset.** The app ships only as a web
+  build, so tests resolve `*.web.ts` first, as the production bundle does.
+- **Coverage counts every source file** (`collectCoverageFrom` over `lib`,
+  `components` and `app`), so untested files count against the total. The
+  starting figure is honest: 0.13% of statements.
+- **Tests live in `app/__tests__/`**, never under `app/app/`, where Expo
+  Router would turn them into routes.
+- **`"types": ["jest"]` in `tsconfig.json`.** TypeScript 6 no longer picks up
+  `@types/*` packages on its own, so `tsc` could not see `test` or `expect`.
+- CI runs `npm test -- --ci --coverage` in the `app` job, puts the totals on
+  the run summary and uploads `app/coverage/` as an artifact.
+
+The only test so far is a harness check (`__tests__/harness.test.ts`). It proves
+TypeScript, the `@/` alias and web platform resolution work, and asserts
+nothing about app behaviour. Real tests are designed from the coverage criteria
+for the CIS*4150 project.
+
 ## 2026-11-11 — Deploys wait for CI; the web deploy moves into GitHub Actions — **approved by Wes**
 
 CI has run on every push since the scaffold, but nothing waited for it.
