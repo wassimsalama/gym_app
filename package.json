@@ -12,7 +12,7 @@
     "check": "npm run check:api && npm run check:app",
     "check:api": "cd api && ./.venv/bin/ruff check . && ./.venv/bin/ruff format --check . && ./.venv/bin/pytest",
     "check:app": "npm --prefix app run typecheck && npm --prefix app run lint && npm --prefix app run format:check",
-    "build:web": "npm --prefix app run build:web && node scripts/verify-build.js",
-    "build:pages": "npm ci --prefix app && npm --prefix app run build:web && node scripts/verify-build.js"
+    "build:web": "npm --prefix app run build:web && node scripts/patch-html.js && node scripts/verify-build.js",
+    "build:pages": "npm ci --prefix app && npm --prefix app run build:web && node scripts/patch-html.js && node scripts/verify-build.js"
   }
 }

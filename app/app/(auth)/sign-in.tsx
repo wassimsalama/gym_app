@@ -1,11 +1,11 @@
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { PasswordInput } from '@/components/PasswordInput';
-import { signIn } from '@/lib/auth';
+import { isServerFault, resendConfirmation, signIn } from '@/lib/auth';
 import { describeWait, recordFailure, recordSuccess, secondsRemaining } from '@/lib/loginThrottle';
 
 export default function SignIn() {
@@ -15,6 +15,9 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lockedFor, setLockedFor] = useState(0);
+  const { notice } = useLocalSearchParams<{ notice?: string }>();
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const isLocked = lockedFor > 0;
 
@@ -48,21 +51,50 @@ export default function SignIn() {
 
     setBusy(true);
     setError(null);
+    setUnconfirmed(false);
+    setResent(false);
 
     const { error: authError } = await signIn(email, password);
 
     if (authError) {
-      const next = recordFailure(email);
-      setLockedFor(next);
-      setError(
-        next > 0 ? `Too many attempts. Try again in ${describeWait(next)}.` : authError.message,
-      );
+      // An unconfirmed address is not a wrong password, and must not be
+      // throttled like one — the account is unreachable no matter how many
+      // times it is typed correctly, so counting attempts only locks someone
+      // out of the screen that offers the actual remedy.
+      if (authError.code === 'email_not_confirmed') {
+        setUnconfirmed(true);
+      } else if (isServerFault(authError)) {
+        // Not a failed attempt. The server was unreachable or broken, so this
+        // says nothing about the password and must not count toward a lockout —
+        // otherwise an outage locks people out of the one screen they are
+        // waiting on, which is exactly what happened when the database paused.
+        setError(
+          'Could not reach the server. Nothing is wrong with your details — try again shortly.',
+        );
+      } else {
+        const next = recordFailure(email);
+        setLockedFor(next);
+        setError(
+          next > 0 ? `Too many attempts. Try again in ${describeWait(next)}.` : authError.message,
+        );
+      }
     } else {
       recordSuccess(email);
       // The auth listener in useAuth swaps the navigator; no push needed.
     }
 
     setBusy(false);
+  }
+
+  async function resend() {
+    setBusy(true);
+    const { error: failure } = await resendConfirmation(email);
+    setBusy(false);
+    if (failure) {
+      setError(failure.message);
+      return;
+    }
+    setResent(true);
   }
 
   return (
@@ -98,7 +130,32 @@ export default function SignIn() {
           <Text className="-mt-1 text-right text-sm text-muted">Forgotten your password?</Text>
         </Link>
 
+        {notice === 'account-deleted' ? (
+          <View className="rounded-2xl border border-line bg-surface p-4">
+            <Text className="text-sm text-white">
+              Your account and its data have been removed. Deleting the sign-in itself is handled by
+              Supabase and may take a moment to disappear everywhere.
+            </Text>
+          </View>
+        ) : null}
+
         {error ? <Text className="text-sm text-danger">{error}</Text> : null}
+
+        {unconfirmed ? (
+          <View className="gap-3 rounded-2xl border border-line bg-surface p-4">
+            <Text className="text-sm text-white">
+              This address has not been confirmed yet. Check your inbox for the confirmation email —
+              resetting your password will not fix it.
+            </Text>
+            {resent ? (
+              <Text className="text-sm text-accent">
+                Sent. If it does not arrive, check your spam folder.
+              </Text>
+            ) : (
+              <Button title="Resend confirmation email" variant="ghost" onPress={resend} />
+            )}
+          </View>
+        ) : null}
 
         <Button
           title={isLocked ? `Wait ${describeWait(lockedFor)}` : 'Sign in'}

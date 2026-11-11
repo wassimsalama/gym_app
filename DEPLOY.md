@@ -141,21 +141,41 @@ Nothing else to do — the API runs its own migrations on start.
 
 4. Check it: `curl https://<your-api>.up.railway.app/health` → `{"status":"ok"}`
 
+5. **Settings → turn on "Wait for CI".** Railway then holds each deploy until
+   the GitHub Actions workflow for that commit passes, and skips it if the
+   workflow fails, leaving the previous version running. The toggle only
+   appears once the repo has a workflow that runs on push, which
+   `.github/workflows/ci.yml` does. It cannot be set in `railway.json`, and
+   Railway users report it can switch itself off after a manual redeploy, so
+   check it is still on if a broken commit ever ships.
+
 ---
 
 ## 3. Web — Cloudflare Pages
 
+Normally CI does this: see **Deploys from GitHub Actions** below. The manual
+steps here are for the first deploy and as a fallback.
+
 Build locally and upload the output. Expo's web export is a static folder, so
 there is nothing to run.
 
-Production values live in **`app/.env.production`** (gitignored), leaving `.env`
-pointed at local development:
+Production values live in **`app/.env.production`**, which is **not committed**
+— it is gitignored and exists only on the machine you deploy from. Create it
+from `app/.env.example` with the production API URL, Supabase URL and anon key.
 
-```
-EXPO_PUBLIC_API_URL=https://<your-api>.up.railway.app
-EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-```
+Every value in it is `EXPO_PUBLIC_*`, so Expo inlines it into the bundle every
+visitor downloads; the anon key in particular is public the moment the site is
+live, and row level security (migration `0003`) is what makes that safe. It is
+kept out of git anyway, because env files do not belong in a public repository
+and nothing here needs it there: the site is deployed from a local build with
+`wrangler pages deploy`, which reads the file from disk.
+
+If the file is missing, the build fails loudly — `verify-build.js` rejects a
+bundle with no production API URL rather than shipping one pointed at nothing.
+
+Real secrets — the `service_role` key, the database password, the JWT secret —
+are server-side only and live in Railway's variables. They never enter this
+repository.
 
 Then, from the repo root:
 
@@ -180,6 +200,33 @@ in `app/dist`.
 `EXPO_PUBLIC_*` values are **baked into the bundle at build time**, not read at
 runtime. Changing the API URL means rebuilding and re-uploading — there is no
 environment variable to edit afterwards.
+
+### Deploys from GitHub Actions — the normal path
+
+The `deploy-web` job in `.github/workflows/ci.yml` does the build and upload
+above on every push to `main`, and only after the `api` and `app` jobs pass.
+It writes `app/.env.production` on the runner from repository variables, then
+runs `npm run build:pages` and `wrangler pages deploy`. One-time setup, in
+**GitHub → Settings → Secrets and variables → Actions**:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Variable | `EXPO_PUBLIC_API_URL` | your Railway URL |
+| Variable | `EXPO_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
+| Variable | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | the anon key |
+| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → custom, with **Account · Cloudflare Pages · Edit** |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | your account id — also in `.wrangler/cache/pages.json` on the laptop that deploys |
+
+The `EXPO_PUBLIC_*` values are variables rather than secrets because they ship
+inside the public bundle anyway, and a visible value makes a wrong one easy to
+spot. The API token is a real secret.
+
+The job deploys with `--branch=main`, which goes to production only if `main`
+is the Pages project's production branch.
+
+Railway's "Wait for CI" waits for the whole workflow, this job included. A
+failed web deploy therefore also skips that commit's API deploy, and on every
+release the site goes live a few minutes before the API.
 
 ### Automatic deploys from GitHub
 
@@ -323,8 +370,10 @@ Check these in order; each one fails distinctively.
 
 ## Updating
 
-- **API** — push to the branch Railway watches. It rebuilds and runs migrations.
-- **Web** — rebuild with the command above and re-upload to Pages.
+- **API** — merge to `main`. Once CI passes, Railway rebuilds and runs
+  migrations.
+- **Web** — merge to `main`. The `deploy-web` job builds and uploads it once
+  the checks pass; the manual build and upload above is the fallback.
 
 ## What this costs
 

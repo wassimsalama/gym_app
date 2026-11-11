@@ -1,3 +1,4 @@
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +12,29 @@ import { flushAfterAuthRefresh, startSync } from '@/lib/sync';
 
 export default function RootLayout() {
   const { session, loading } = useAuth();
+
+  // @expo/vector-icons registers its @font-face lazily, and on this web build
+  // it never did: the tab bar rendered its labels with blank space where the
+  // glyphs belong. Verified by loading the shipped .ttf by hand in the browser
+  // — the file is fine and the glyphs render, but `document.fonts` was empty,
+  // so nothing had registered it. Preloading here covers every screen at once.
+  //
+  // `error` is treated as loaded on purpose. A missing icon font is a cosmetic
+  // problem; blocking on it would turn that into a white screen with no way out.
+  const [fontsLoaded, fontError] = useFonts({
+    // The .ttf is required explicitly rather than passing `Ionicons.font`.
+    // That map is populated by the icon set's own module initialisation, and
+    // on this build it arrived empty — useFonts then resolved instantly having
+    // registered nothing, which looks identical to success.
+    //
+    // It is also a *vendored copy*, not the one inside node_modules. Metro
+    // mirrors an asset's source path into the output, so requiring it from the
+    // package put the font at assets/node_modules/@expo/... — and wrangler
+    // skips every path containing node_modules when it uploads. The file built
+    // fine, passed every local check, and simply was not there in production:
+    // Safari asked for it, got the SPA fallback's HTML, and refused to use it.
+    Ionicons: require('../assets/fonts/Ionicons.ttf'),
+  });
 
   useEffect(() => {
     // Flush triggers from §8.2: reconnect and foreground are handled inside
@@ -31,7 +55,7 @@ export default function RootLayout() {
 
   // Hold the shell until the persisted session is read back from SecureStore,
   // otherwise the sign-in screen flashes on every cold start for a signed-in user.
-  if (loading) {
+  if (loading || !(fontsLoaded || fontError)) {
     return (
       <View className="flex-1 items-center justify-center bg-ink">
         <ActivityIndicator color="#4ADE80" />

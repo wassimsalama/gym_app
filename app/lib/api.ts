@@ -8,6 +8,7 @@
 import { api, ApiError, request } from '@/lib/http';
 import type { IsoDate } from '@/lib/dates';
 import { enqueue } from '@/lib/sync';
+import type { Unit } from '@/lib/units';
 
 export { ApiError, API_URL } from '@/lib/http';
 
@@ -29,6 +30,8 @@ export type Split = 'push' | 'pull' | 'legs' | 'upper' | 'lower' | 'full' | 'oth
 export type DailyLog = {
   log_date: IsoDate;
   weight_kg: number | null;
+  /** null means the day was never logged, which is not the same as 0. */
+  steps: number | null;
   calories: number | null;
   protein_g: number | null;
   carbs_g: number | null;
@@ -69,6 +72,14 @@ export type Dashboard = {
     start_weight_kg: number;
     goal_weight_kg: number;
   } | null;
+  /** `average` is null when nothing in the window was logged. Unlogged days are
+   *  skipped, never counted as zero. */
+  steps: {
+    today: number | null;
+    average: number | null;
+    days_logged: number;
+    reliable: boolean;
+  };
   tdee: { estimate_kcal: number | null; days_of_data: number; reliable: boolean };
   volume: { muscle_group: string; sets_this_week: number; weekly_target: number }[];
   prs_recent: {
@@ -105,6 +116,16 @@ export type Dashboard = {
 
 export const health = () => request<Health>('/health', { anonymous: true });
 export const healthAuth = () => api.get<AuthHealth>('/health-auth');
+
+/**
+ * Change the display unit.
+ *
+ * Deliberately not routed through the offline queue. The queue exists so a
+ * logged set or weight survives a dead connection; a preference is worth
+ * nothing if it syncs an hour later, and queueing it would let two devices
+ * replay conflicting values long after the fact.
+ */
+export const updateUnit = (unit: Unit) => api.patch<AuthHealth>('/me', { unit });
 
 /**
  * Writes below go through the offline queue (§8): durably stored, applied
@@ -206,6 +227,46 @@ export const saveSession = (body: {
   sets: SetInput[];
 }) => enqueue<SessionSaved>('POST', '/workout-sessions', body);
 
+/** Activities the cardio form offers. `other` keeps the list from blocking a log. */
+export const CARDIO_ACTIVITIES = [
+  'run',
+  'walk',
+  'cycle',
+  'swim',
+  'row',
+  'elliptical',
+  'stairs',
+  'hike',
+  'class',
+  'other',
+] as const;
+
+export type CardioActivity = (typeof CARDIO_ACTIVITIES)[number];
+
+export type CardioSession = {
+  id: number;
+  client_uuid: string;
+  session_date: IsoDate;
+  activity: CardioActivity;
+  duration_min: number;
+  /** null means the activity does not measure distance — not that it was zero. */
+  distance_km: number | null;
+  notes: string | null;
+};
+
+/** Queued, same as a workout: `client_uuid` is the server's dedupe key. */
+export const saveCardio = (body: {
+  client_uuid: string;
+  session_date: IsoDate;
+  activity: CardioActivity;
+  duration_min: number;
+  distance_km?: number | null;
+  notes?: string | null;
+}) => enqueue<CardioSession>('POST', '/cardio-sessions', body);
+
+export const getCardio = (from: IsoDate, to: IsoDate) =>
+  api.get<CardioSession[]>(`/cardio-sessions?from=${from}&to=${to}`);
+
 /** Opens a new goal, closing any active one and re-baselining on the latest weight. */
 export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null) =>
   api.post<Goal>('/goals', { goal_weight_kg, ...(target_date ? { target_date } : {}) });
@@ -215,8 +276,11 @@ export const createGoal = (goal_weight_kg: number, target_date?: IsoDate | null)
  * editing where you're heading must not reset how far you've come.
  * Omitted keys are left alone; `target_date: null` clears the date.
  */
-export const updateGoal = (patch: { goal_weight_kg?: number; target_date?: IsoDate | null }) =>
-  api.patch<Goal>('/goals/active', patch);
+export const updateGoal = (patch: {
+  goal_weight_kg?: number;
+  start_weight_kg?: number;
+  target_date?: IsoDate | null;
+}) => api.patch<Goal>('/goals/active', patch);
 
 /** Resolves to null rather than throwing when no goal has been set yet. */
 export async function getActiveGoal(): Promise<Goal | null> {

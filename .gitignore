@@ -13,13 +13,14 @@ node_modules/
 .expo/
 dist/
 web-build/
+coverage/
 *.tsbuildinfo
 
 # Env & secrets
 .env
 .env.*
 .env.local
-.env.production
+# Negations must come last — gitignore takes the final matching rule.
 !.env.example
 
 # VS Code Local History snapshots every edit, including .env files, under

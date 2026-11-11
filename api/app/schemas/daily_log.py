@@ -11,6 +11,10 @@ Split = Literal["push", "pull", "legs", "upper", "lower", "full", "other"]
 # value returns a 422 naming the field rather than a 500 from the driver.
 MAX_BODY_WEIGHT_KG = Decimal("999.99")
 
+#: Typo guard, not a judgement about what anyone can walk: 200k steps is roughly
+#: 150km, which no phone reports honestly (migration 0004).
+MAX_STEPS = 200_000
+
 
 class DailyLogUpsert(BaseModel):
     """Body of `PUT /daily-logs/{date}`.
@@ -28,6 +32,7 @@ class DailyLogUpsert(BaseModel):
     protein_g: int | None = Field(default=None, ge=0, le=10_000)
     carbs_g: int | None = Field(default=None, ge=0, le=10_000)
     fat_g: int | None = Field(default=None, ge=0, le=10_000)
+    steps: int | None = Field(default=None, ge=0, le=MAX_STEPS)
     trained: bool | None = None
     split: Split | None = None
 
@@ -37,6 +42,7 @@ class DailyLogOut(BaseModel):
 
     log_date: date
     weight_kg: Decimal | None
+    steps: int | None
     calories: int | None
     protein_g: int | None
     carbs_g: int | None
