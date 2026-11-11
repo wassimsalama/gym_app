@@ -14,6 +14,9 @@ module.exports = {
   // tsconfig's `@/*` alias. Metro reads tsconfig paths; Jest does not.
   moduleNameMapper: { '^@/(.*)$': '<rootDir>/$1' },
 
+  // e2e/ holds Playwright specs, which Jest would otherwise pick up by name.
+  testPathIgnorePatterns: ['/node_modules/', '/e2e/', '/dist-e2e/'],
+
   // Count every source file, including ones no test has imported yet. Without
   // this Jest reports only the files a test happened to load, and the figure
   // starts out flattering instead of honest.
