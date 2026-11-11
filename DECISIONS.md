@@ -8,6 +8,60 @@ moving; say the word and it gets reversed.
 
 ---
 
+## 2026-11-11 — Jest for the frontend (`jest-expo`) — **approved by Wes**
+
+The frontend had no tests at all, and four of the bugs that reached users were
+frontend bugs. New dev dependencies (§14): `jest`, `jest-expo` and
+`@types/jest`, at the versions `npx expo install` picked for SDK 57. They are
+dev-only, so the shipped bundle does not change, and no existing package moved
+in the lockfile.
+
+- **`jest-expo/web`, not the default iOS preset.** The app ships only as a web
+  build, so tests resolve `*.web.ts` first, as the production bundle does.
+- **Coverage counts every source file** (`collectCoverageFrom` over `lib`,
+  `components` and `app`), so untested files count against the total. The
+  starting figure is honest: 0.13% of statements.
+- **Tests live in `app/__tests__/`**, never under `app/app/`, where Expo
+  Router would turn them into routes.
+- **`"types": ["jest"]` in `tsconfig.json`.** TypeScript 6 no longer picks up
+  `@types/*` packages on its own, so `tsc` could not see `test` or `expect`.
+- CI runs `npm test -- --ci --coverage` in the `app` job, puts the totals on
+  the run summary and uploads `app/coverage/` as an artifact.
+
+The only test so far is a harness check (`__tests__/harness.test.ts`). It proves
+TypeScript, the `@/` alias and web platform resolution work, and asserts
+nothing about app behaviour. Real tests are designed from the coverage criteria
+for the CIS*4150 project.
+
+## 2026-11-11 — Deploys wait for CI; the web deploy moves into GitHub Actions — **approved by Wes**
+
+CI has run on every push since the scaffold, but nothing waited for it.
+Railway rebuilt the API on every push to `main`, and the site was built and
+uploaded by hand from one laptop, so a failing check could not stop anything
+from shipping. Part of the CIS*4150 term project (CI/CT for StallPoint).
+
+- **Web.** A `deploy-web` job runs `npm run build:pages` and
+  `wrangler pages deploy` on a push to `main`, and only after `api` and `app`
+  pass. It writes `app/.env.production` on the runner from repository
+  variables. The file still never enters git (2026-10-07); its values are
+  public by design, so they are Actions *variables*, and only the Cloudflare
+  token and account id are secrets.
+- **API.** Railway's "Wait for CI" holds each deploy until the workflow
+  passes. It is a dashboard setting; `railway.json` cannot express it.
+- **Coverage.** CI now runs pytest with `--cov=app --cov-branch`, uploads
+  `coverage.xml` as an artifact and puts the table on the run's summary page.
+  The `app/services`-only default in `pyproject.toml` is unchanged, so local
+  runs report what they always did; the CI figure is the whole backend.
+- **Runs on `main` no longer cancel each other**, so builds cannot finish out
+  of order and ship an older bundle over a newer one. Branch runs still cancel.
+
+New dependency (§14): `cloudflare/wrangler-action@v3`, in CI only. No package
+manifest changed, and Wrangler was already the deploy tool.
+
+Trade-off accepted: Railway waits for the *whole* workflow, so a failed web
+deploy also skips that commit's API deploy, and the site goes live a few
+minutes before the API on each release.
+
 ## 2026-09-07 — Repo lives at `projects/gym_app`, flattened after a GitKraken nesting
 
 A GitKraken operation mid-scaffold nested the tree inside itself

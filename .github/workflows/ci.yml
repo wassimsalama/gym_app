@@ -8,7 +8,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # On a branch, a newer push makes the older run pointless, so cancel it. On
+  # main a run can end in a deploy, so runs queue in order instead: parallel
+  # runs could finish out of order and ship an older build over a newer one.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   api:
@@ -63,7 +66,23 @@ jobs:
         run: alembic check
 
       - name: Test
-        run: pytest
+        # --cov=app measures the whole backend rather than pyproject's default
+        # of app/services alone, and --cov-branch adds branch coverage. The
+        # markdown table is appended to the run's summary page.
+        run: >-
+          pytest
+          --cov=app --cov-branch
+          --cov-report=term-missing:skip-covered
+          --cov-report=xml
+          --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api
+          path: api/coverage.xml
+          if-no-files-found: warn
 
   app:
     name: app — tsc + eslint
@@ -98,3 +117,77 @@ jobs:
 
       - name: Format
         run: npm run format:check
+
+      - name: Test
+        # jest.config.js counts every source file, untested ones included, so
+        # the total is the whole frontend rather than whatever tests import.
+        run: npm test -- --ci --coverage
+
+      - name: Coverage summary
+        if: ${{ !cancelled() && hashFiles('app/coverage/coverage-summary.json') != '' }}
+        run: |
+          node -e '
+            const t = require("./coverage/coverage-summary.json").total;
+            const row = (k) => `| ${k} | ${t[k].covered}/${t[k].total} | ${t[k].pct}% |`;
+            console.log(["### app coverage", "", "| | Covered | % |", "| --- | ---: | ---: |",
+              ...["statements", "branches", "functions", "lines"].map(row)].join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-app
+          path: app/coverage/
+          if-no-files-found: warn
+
+  deploy-web:
+    name: deploy — web (Cloudflare Pages)
+    # Only a push to main ships, and only once both jobs above pass. The API is
+    # gated on Railway's side: "Wait for CI" holds its deploy until this whole
+    # workflow succeeds, this job included.
+    needs: [api, app]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Wrangler requires Node 22.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Production environment
+        # The same file a local deploy reads (DEPLOY.md §3), written from
+        # repository variables instead of living on one laptop. Every value is
+        # EXPO_PUBLIC_* and is inlined into the public bundle; none is secret.
+        # The web build ignores EXPO_PUBLIC_PRIVACY_URL and _RESET_URL.
+        env:
+          API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          {
+            echo "EXPO_PUBLIC_API_URL=$API_URL"
+            echo "EXPO_PUBLIC_SUPABASE_URL=$SUPABASE_URL"
+            echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+          } > app/.env.production
+
+      - name: Build and verify
+        # verify-build.js rejects a bundle without a production API URL or a
+        # Supabase URL, so a missing variable fails here instead of shipping.
+        run: npm run build:pages
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy app/dist --project-name=stallpoint --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
