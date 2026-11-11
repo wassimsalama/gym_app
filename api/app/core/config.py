@@ -77,6 +77,16 @@ class Settings(BaseSettings):
         return {a.strip() for a in self.admin_user_ids.split(",") if a.strip()}
 
     @property
+    def is_production(self) -> bool:
+        """Configured with real browser origins, i.e. not a developer machine.
+
+        Reuses `allowed_origins` rather than introducing a separate flag: it is
+        already the switch that turns off `dev_origin_regex`, and a second
+        variable is a second thing to forget to set on the host.
+        """
+        return bool(self.origins)
+
+    @property
     def dev_origin_regex(self) -> str | None:
         """Localhost and private-LAN origins, for development only.
 

@@ -8,6 +8,60 @@ moving; say the word and it gets reversed.
 
 ---
 
+## 2026-11-11 — Jest for the frontend (`jest-expo`) — **approved by Wes**
+
+The frontend had no tests at all, and four of the bugs that reached users were
+frontend bugs. New dev dependencies (§14): `jest`, `jest-expo` and
+`@types/jest`, at the versions `npx expo install` picked for SDK 57. They are
+dev-only, so the shipped bundle does not change, and no existing package moved
+in the lockfile.
+
+- **`jest-expo/web`, not the default iOS preset.** The app ships only as a web
+  build, so tests resolve `*.web.ts` first, as the production bundle does.
+- **Coverage counts every source file** (`collectCoverageFrom` over `lib`,
+  `components` and `app`), so untested files count against the total. The
+  starting figure is honest: 0.13% of statements.
+- **Tests live in `app/__tests__/`**, never under `app/app/`, where Expo
+  Router would turn them into routes.
+- **`"types": ["jest"]` in `tsconfig.json`.** TypeScript 6 no longer picks up
+  `@types/*` packages on its own, so `tsc` could not see `test` or `expect`.
+- CI runs `npm test -- --ci --coverage` in the `app` job, puts the totals on
+  the run summary and uploads `app/coverage/` as an artifact.
+
+The only test so far is a harness check (`__tests__/harness.test.ts`). It proves
+TypeScript, the `@/` alias and web platform resolution work, and asserts
+nothing about app behaviour. Real tests are designed from the coverage criteria
+for the CIS*4150 project.
+
+## 2026-11-11 — Deploys wait for CI; the web deploy moves into GitHub Actions — **approved by Wes**
+
+CI has run on every push since the scaffold, but nothing waited for it.
+Railway rebuilt the API on every push to `main`, and the site was built and
+uploaded by hand from one laptop, so a failing check could not stop anything
+from shipping. Part of the CIS*4150 term project (CI/CT for StallPoint).
+
+- **Web.** A `deploy-web` job runs `npm run build:pages` and
+  `wrangler pages deploy` on a push to `main`, and only after `api` and `app`
+  pass. It writes `app/.env.production` on the runner from repository
+  variables. The file still never enters git (2026-10-07); its values are
+  public by design, so they are Actions *variables*, and only the Cloudflare
+  token and account id are secrets.
+- **API.** Railway's "Wait for CI" holds each deploy until the workflow
+  passes. It is a dashboard setting; `railway.json` cannot express it.
+- **Coverage.** CI now runs pytest with `--cov=app --cov-branch`, uploads
+  `coverage.xml` as an artifact and puts the table on the run's summary page.
+  The `app/services`-only default in `pyproject.toml` is unchanged, so local
+  runs report what they always did; the CI figure is the whole backend.
+- **Runs on `main` no longer cancel each other**, so builds cannot finish out
+  of order and ship an older bundle over a newer one. Branch runs still cancel.
+
+New dependency (§14): `cloudflare/wrangler-action@v3`, in CI only. No package
+manifest changed, and Wrangler was already the deploy tool.
+
+Trade-off accepted: Railway waits for the *whole* workflow, so a failed web
+deploy also skips that commit's API deploy, and the site goes live a few
+minutes before the API on each release.
+
 ## 2026-09-07 — Repo lives at `projects/gym_app`, flattened after a GitKraken nesting
 
 A GitKraken operation mid-scaffold nested the tree inside itself
@@ -15,6 +69,113 @@ A GitKraken operation mid-scaffold nested the tree inside itself
 chose to flatten: inner contents lifted one level, inner `.git` kept (it holds
 `origin`), outer empty `.git` removed. Neither repo had commits, so no history
 was at risk. The removed `.git` was backed up to the session scratchpad first.
+
+## 2026-09-08 — A low-intake observation, and its exact wording
+
+The user asked for a message when someone eats far too little for their body —
+their example was 300lb on 1500 kcal from day one. This is the only thing the
+suggestions engine says that is about harm rather than progress, so the wording
+was agreed before it shipped rather than after.
+
+**Rule.** A 14-day mean intake, requiring at least 10 logged days, below 60% of
+the maintenance the app has *measured from the user's own weight and intake*.
+It does not fire while that estimate is unreliable. The alternative would be
+comparing intake against a formula-derived maintenance, which this app
+deliberately never does — telling somebody their eating is dangerous on the
+strength of a population equation is worse than saying nothing.
+
+**Wording, approved by the user:**
+
+> You've averaged 1,500 kcal a day over the last 14 days — about 50% of the
+> 3,000 kcal maintenance measured from your own weight and intake. That's a
+> large gap to hold for long. If it's deliberate, a doctor or dietitian is the
+> right person to check it with.
+
+It states an observation with its numbers visible, does not instruct anyone to
+eat differently, and does not imply the app has cleared anything medically. It
+names a professional because that is the only safe referral available. A test
+asserts the absence of instructing phrases, so a later edit that turns it into
+advice fails the suite rather than shipping quietly.
+
+Unlogged days are skipped rather than read as zero, the same rule as steps in
+migration 0004: ten logged days at 2400 average 2400 and stay quiet, where
+counting four blanks as zero would drag the mean to 1714 and fire a health
+warning at somebody eating normally. That case has its own test.
+
+It outranks every other suggestion. Everything else in the engine is about
+going faster; this one is not.
+
+## 2026-09-08 — The goal's starting weight is editable (deviation from §7.1)
+
+§7.1 fixes `start_weight_kg` at goal creation, and `GoalUpdate` refused it, so
+that adjusting a target could not silently reset progress to zero. That
+reasoning is sound for targets and was kept.
+
+It does not survive a typo. If the baseline was wrong — entered in the wrong
+unit, or simply mistyped — the only remedy was `POST /goals`, which throws away
+the goal and its history to correct a number that was never right. The user
+asked for this directly; options were put to them (allow editing, keep it
+immutable and surface the restart path better, or allow it only within the
+first N days) and they chose to allow it.
+
+`start_date` stays immutable. Moving it changes which observations count toward
+the trend, which is genuinely re-baselining, and re-baselining remains an
+explicit new goal.
+
+Progress and the projection are derived at read time from the baseline and the
+target, so correcting one recalculates both with no migration and no stored
+value to go stale — which is also why this was safe to change.
+
+One existing test asserted the old rule and was updated rather than deleted:
+what it was really protecting is that unknown fields cannot be smuggled onto a
+goal, so it now checks `start_date` and `user_id` are still refused.
+
+## 2026-10-07 — `app/.env.production` is no longer committed (reverses 2026-09-08)
+
+The September decision below committed the file so Cloudflare's hosted build
+could see the variables. That build was the Worker, which has since been
+deleted; the site is now deployed from a local build with `wrangler pages
+deploy`, which reads the file from disk. The reason for committing it is gone.
+
+The user's rule is that env files do not go in a public repository, and that
+now costs nothing to honour, so the file is gitignored again and kept locally.
+
+A full scan of all 62 commits found nothing secret was ever in it: the only JWT
+ever committed is the anon key (`role=anon`), and there is no service-role key,
+`sb_secret_` key, database password, JWT secret or deploy token anywhere in
+history. The anon key is public by design and inert under RLS, so it was not
+rotated — rotating it means rotating the JWT secret and signing every user out,
+for no gain. The file remains in git history; removing it from history would
+need a force push and was not done.
+
+One lesson from the scan itself: the first two passes reported "none" for
+everything, including a string known to be present, because zsh does not
+word-split an unquoted variable and the errors were sent to /dev/null. Only a
+positive control caught it. A secrets scan that cannot report a hit it should
+find is worse than none.
+
+## 2026-09-08 — `app/.env.production` is committed, on purpose
+
+Cloudflare's hosted build kept failing because it was not passing build-time
+variables to the build step, and the difference between its "build variables"
+and "runtime variables" is not visible from a failure. Two attempts at
+configuring it correctly did not stick.
+
+Rather than keep guessing at a vendor UI, the dependency was removed: the file
+is now in git.
+
+This is safe because none of it is secret. `EXPO_PUBLIC_*` values are inlined
+into the JavaScript every visitor downloads — verified by pulling the anon key
+straight out of the live site's bundle, where it already sits. Keeping them out
+of version control protects nothing and breaks any host that does not thread
+build variables through.
+
+Row level security is what makes publishing the anon key safe. Before migration
+`0003` it granted read and write access to every table; now it grants nothing.
+
+The boundary that matters is unchanged and stated in the file's header: the
+`service_role` key, the database password and the JWT secret are server-side
+only, live in Railway's variables, and never enter this repository.
 
 ## 2026-09-08 — Row level security: the API could be bypassed entirely — **found by Wes**
 

@@ -42,10 +42,13 @@
     "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
+    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "^57.0.2",
     "eslint-config-prettier": "^10.1.8",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.6",
     "prettier": "^3.9.6",
     "typescript": "~6.0.3"
   },
@@ -58,6 +61,8 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json}\"",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
     "build:web": "expo export --platform web --output-dir dist --clear"
   },
   "private": true

@@ -96,7 +96,8 @@ def test_another_users_idempotency_key_is_refused(
     client.post("/workout-sessions", json=body, headers=auth_headers)
 
     other = {"Authorization": f"Bearer {make_token()}"}
-    assert client.post("/workout-sessions", json=body, headers=other).status_code == 403
+    # 404 rather than 403: a 403 would confirm the idempotency key is in use.
+    assert client.post("/workout-sessions", json=body, headers=other).status_code == 404
 
 
 def test_a_first_ever_session_sets_no_prs(client: TestClient, auth_headers: dict[str, str]) -> None:

@@ -195,7 +195,9 @@ def test_cannot_hijack_another_users_session_via_client_uuid(
         },
         headers=attacker,
     )
-    assert resp.status_code == 403
+    # 404, not 403: a 403 confirms the identifier is in use by someone, which is
+    # the enumeration signal the status code is supposed to withhold.
+    assert resp.status_code == 404
     assert "session" not in resp.json()
 
 
@@ -227,7 +229,8 @@ def test_cannot_claim_a_photo_key_under_another_users_prefix(
 ) -> None:
     stolen = f"{owner_id}/{uuid.uuid4()}.jpg"
     resp = client.post("/photos", json={"s3_key": stolen, "taken_on": DAY}, headers=attacker)
-    assert resp.status_code == 403
+    # 404, not 403 — see the note on session hijacking above.
+    assert resp.status_code == 404
 
 
 # --- deleting someone else's data ------------------------------------------

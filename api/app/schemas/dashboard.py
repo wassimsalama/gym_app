@@ -80,6 +80,18 @@ class Recap(BaseModel):
     best_lift: BestLift | None
 
 
+class StepsBlock(BaseModel):
+    """`average` is None when nothing in the window was logged.
+
+    Unlogged days are skipped, never counted as zero — see services/steps.py.
+    """
+
+    today: int | None
+    average: int | None
+    days_logged: int
+    reliable: bool
+
+
 class Dashboard(BaseModel):
     streaks: Streaks
     weight: WeightBlock
@@ -87,6 +99,7 @@ class Dashboard(BaseModel):
     # launch, so in practice the app always has one by the time it gets here.
     goal: GoalBlock | None
     tdee: TdeeBlock
+    steps: StepsBlock
     volume: list[VolumeRing]
     prs_recent: list[dict]
     suggestions: list[Suggestion]

@@ -85,7 +85,7 @@ export function ExerciseSearch({ onPick, onClose }: Props) {
       <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
         <View className="flex-row items-center gap-3 px-5 pb-3 pt-2">
           <TextInput
-            className="h-12 flex-1 rounded-xl border border-line bg-surface px-4 text-base text-white"
+            className="h-12 min-w-0 flex-1 rounded-xl border border-line bg-surface px-4 text-base text-white"
             placeholder="Search exercises"
             placeholderTextColor="#8A97A6"
             value={query}
