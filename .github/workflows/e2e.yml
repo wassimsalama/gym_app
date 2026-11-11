@@ -39,6 +39,11 @@ jobs:
         run: npm ci
 
       - name: Browsers
+        # A healthy install takes a minute or two. The first run sat on this
+        # step until the job's 20-minute limit cancelled it, so fail it early
+        # instead: a step that times out fails rather than cancels, and the
+        # job ends with a reason in the log.
+        timeout-minutes: 8
         run: npx playwright install --with-deps chromium webkit
 
       - name: Build

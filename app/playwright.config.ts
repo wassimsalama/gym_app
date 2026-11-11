@@ -18,6 +18,10 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  // Ends a hung run as a reported failure, well inside the CI job's 20 minutes,
+  // so the report still uploads: a job killed by timeout-minutes is cancelled,
+  // and the upload step skips cancelled jobs. `--debug` turns it off.
+  globalTimeout: 10 * 60_000,
   // One retry in CI. A test that fails and then passes is reported as
   // "flaky" rather than hidden, which is what the flaky-test rate is read from.
   retries: process.env.CI ? 1 : 0,
@@ -25,6 +29,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
+    // Name the step that hung instead of reporting a bare test timeout.
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
   },
   projects: [
     // iPhone Safari is the device the app is built for, and WebKit is the
@@ -35,6 +42,10 @@ export default defineConfig({
   webServer: {
     command: `node e2e/serve.js dist-e2e ${PORT}`,
     url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a server already on the port. serve.js starts in
+    // milliseconds, and 4173 is also `vite preview`'s default, so reuse could
+    // quietly run the suite against a different site.
+    reuseExistingServer: false,
+    timeout: 15_000,
   },
 });
