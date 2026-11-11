@@ -8,6 +8,35 @@ moving; say the word and it gets reversed.
 
 ---
 
+## 2026-11-11 — Deploys wait for CI; the web deploy moves into GitHub Actions — **approved by Wes**
+
+CI has run on every push since the scaffold, but nothing waited for it.
+Railway rebuilt the API on every push to `main`, and the site was built and
+uploaded by hand from one laptop, so a failing check could not stop anything
+from shipping. Part of the CIS*4150 term project (CI/CT for StallPoint).
+
+- **Web.** A `deploy-web` job runs `npm run build:pages` and
+  `wrangler pages deploy` on a push to `main`, and only after `api` and `app`
+  pass. It writes `app/.env.production` on the runner from repository
+  variables. The file still never enters git (2026-10-07); its values are
+  public by design, so they are Actions *variables*, and only the Cloudflare
+  token and account id are secrets.
+- **API.** Railway's "Wait for CI" holds each deploy until the workflow
+  passes. It is a dashboard setting; `railway.json` cannot express it.
+- **Coverage.** CI now runs pytest with `--cov=app --cov-branch`, uploads
+  `coverage.xml` as an artifact and puts the table on the run's summary page.
+  The `app/services`-only default in `pyproject.toml` is unchanged, so local
+  runs report what they always did; the CI figure is the whole backend.
+- **Runs on `main` no longer cancel each other**, so builds cannot finish out
+  of order and ship an older bundle over a newer one. Branch runs still cancel.
+
+New dependency (§14): `cloudflare/wrangler-action@v3`, in CI only. No package
+manifest changed, and Wrangler was already the deploy tool.
+
+Trade-off accepted: Railway waits for the *whole* workflow, so a failed web
+deploy also skips that commit's API deploy, and the site goes live a few
+minutes before the API on each release.
+
 ## 2026-09-07 — Repo lives at `projects/gym_app`, flattened after a GitKraken nesting
 
 A GitKraken operation mid-scaffold nested the tree inside itself
