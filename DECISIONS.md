@@ -8,6 +8,37 @@ moving; say the word and it gets reversed.
 
 ---
 
+## 2026-11-11 — Playwright end-to-end tests against the web bundle — **approved by Wes**
+
+New dev dependency (§14): `@playwright/test`. Dev-only, no existing package moved.
+
+- **Tests run against the production export**, served by `e2e/serve.js`, a
+  small Node server with the same single-page-app fallback as Cloudflare
+  Pages. That includes answering a missing asset with `index.html` and status
+  200, which is how the icon font went missing, so the harness keeps that
+  behaviour. `expo serve` was not used: it always serves `dist`.
+- **The test build goes to `dist-e2e`, never `dist`**, so a test bundle can
+  never be the folder a deploy uploads.
+- **No test can reach a real service.** `npm run e2e:build` sets
+  `EXPO_NO_DOTENV=1` and fixed `.invalid` URLs, so local `.env` files cannot
+  leak production values into the bundle (checked: the bundle holds only the
+  `.invalid` hosts). The fixture in `e2e/fixtures.ts` also aborts every request
+  that leaves the local server unless the test routes it itself. A positive
+  control confirmed that both the block and a test's own route override work,
+  in both browsers.
+- **Two projects: Mobile Safari (WebKit, iPhone 13) and Desktop Chrome.**
+  iPhone Safari is the target device, and WebKit is where the font bug showed.
+- **One retry in CI**, so a test that fails and then passes is reported as
+  flaky instead of hidden.
+- **A separate `E2E` workflow** runs on pull requests to `main`, nightly at
+  07:00 UTC and on demand. Pushes to `main` never run it, so neither the deploy
+  job nor Railway's "Wait for CI" waits on browser tests.
+
+The only spec so far is a harness check (`e2e/harness.spec.ts`): the bundle
+boots and lands a signed-out visitor on sign-in, and deep links are answered.
+Real tests are designed from the graph-coverage model of the flows for the
+CIS*4150 project.
+
 ## 2026-11-11 — Jest for the frontend (`jest-expo`) — **approved by Wes**
 
 The frontend had no tests at all, and four of the bugs that reached users were
