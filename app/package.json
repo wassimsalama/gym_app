@@ -64,7 +64,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json}\"",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "e2e:build": "EXPO_NO_DOTENV=1 EXPO_PUBLIC_API_URL=http://api.e2e.invalid EXPO_PUBLIC_SUPABASE_URL=https://e2e.supabase.invalid EXPO_PUBLIC_SUPABASE_ANON_KEY=e2e-anon-key expo export --platform web --output-dir dist-e2e --clear",
+    "e2e:build": "EXPO_NO_DOTENV=1 EXPO_PUBLIC_API_URL=http://api.e2e.invalid EXPO_PUBLIC_SUPABASE_URL=https://e2e.supabase.invalid EXPO_PUBLIC_SUPABASE_ANON_KEY=e2e-anon-key expo export --platform web --output-dir dist-e2e --clear && node ../scripts/patch-html.js dist-e2e",
     "e2e": "playwright test",
     "build:web": "expo export --platform web --output-dir dist --clear"
   },

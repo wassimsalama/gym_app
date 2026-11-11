@@ -37,7 +37,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const INK = "#0B0F14";
-const INDEX = path.join(__dirname, "..", "app", "dist", "index.html");
+// Defaults to the deploy build. The end-to-end build passes its own folder
+// (`node ../scripts/patch-html.js dist-e2e`) so the browser tests run against
+// the same shell users get, not Expo's unpatched default.
+const DIST = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(__dirname, "..", "app", "dist");
+const INDEX = path.join(DIST, "index.html");
 
 function fail(message) {
   console.error(`\n  HTML PATCH FAILED: ${message}\n`);

@@ -19,6 +19,11 @@ New dev dependency (§14): `@playwright/test`. Dev-only, no existing package mov
   behaviour. `expo serve` was not used: it always serves `dist`.
 - **The test build goes to `dist-e2e`, never `dist`**, so a test bundle can
   never be the folder a deploy uploads.
+- **The test build gets the production HTML shell.** `e2e:build` runs
+  `scripts/patch-html.js dist-e2e` after the export (the script now takes an
+  optional folder and still defaults to `app/dist`), so the Mobile Safari tests
+  get the same viewport-fit, theme-color and dark background users get. A
+  harness test asserts all three; it failed against the unpatched build first.
 - **No test can reach a real service.** `npm run e2e:build` sets
   `EXPO_NO_DOTENV=1` and fixed `.invalid` URLs, so local `.env` files cannot
   leak production values into the bundle (checked: the bundle holds only the
