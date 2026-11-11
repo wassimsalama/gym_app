@@ -12,8 +12,12 @@ htmlcov/
 node_modules/
 .expo/
 dist/
+dist-e2e/
 web-build/
 coverage/
+playwright-report/
+test-results/
+blob-report/
 *.tsbuildinfo
 
 # Env & secrets

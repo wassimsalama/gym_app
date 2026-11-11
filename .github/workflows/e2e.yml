@@ -1,0 +1,60 @@
+name: E2E
+
+# Browser tests are slower than the unit suites, so they run on pull requests
+# and nightly rather than on every push. They are a separate workflow from CI on
+# purpose: pushes to main never run this file, so Railway's "Wait for CI" and the
+# deploy job never wait on it.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # 07:00 UTC — the middle of the night in Ontario.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e — playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Build
+        # Fixed, unresolvable service URLs; .env files are ignored. See
+        # e2e/fixtures.ts.
+        run: npm run e2e:build
+
+      - name: Test
+        run: npm run e2e
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            app/playwright-report/
+            app/test-results/
+          if-no-files-found: ignore
